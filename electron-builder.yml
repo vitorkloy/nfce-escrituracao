@@ -1,0 +1,33 @@
+appId: br.gov.sefaz.nfce.escrituracao
+productName: Escrituração NFC-e
+copyright: Copyright © 2026
+
+directories:
+  buildResources: public
+  output: release
+
+files:
+  - dist-electron/**
+  - out/**
+  - package.json
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: public/icon.ico
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  installerLanguages: [pt_BR]
+  language: 1046
+
+mac:
+  target: dmg
+  icon: public/icon.icns
+
+linux:
+  target: AppImage
+  icon: public/icon.png

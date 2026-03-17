@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-deep:    #0a0d12;
+  --bg-base:    #0f1117;
+  --bg-surface: #161b24;
+  --bg-raised:  #1e2533;
+  --bg-hover:   #252d3d;
+
+  --border:     #2a3347;
+  --border-hi:  #3d4f6b;
+
+  --text-primary:   #e8edf5;
+  --text-secondary: #8994a8;
+  --text-muted:     #4f5b70;
+
+  --teal:       #00d4aa;
+  --teal-dim:   #00a884;
+  --teal-glow:  rgba(0, 212, 170, 0.12);
+
+  --amber:      #f5a623;
+  --red:        #ff4d6a;
+  --green:      #22c98a;
+
+  --radius-sm:  4px;
+  --radius:     8px;
+  --radius-lg:  12px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Seleção de texto */
+::selection { background: var(--teal-glow); color: var(--teal); }
+
+/* Input base */
+input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color 0.15s;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--teal-dim);
+  box-shadow: 0 0 0 3px var(--teal-glow);
+}
+
+/* Chave de acesso — monospace destacado */
+.chave-acesso {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--teal);
+}
+
+/* Animações */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 0.2s ease forwards; }
+
+@keyframes pulse-teal {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.pulse { animation: pulse-teal 1.2s ease-in-out infinite; }
+
+/* Drag region para a barra de título customizada */
+.drag-region { -webkit-app-region: drag; }
+.no-drag      { -webkit-app-region: no-drag; }
