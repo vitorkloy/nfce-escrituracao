@@ -30,6 +30,8 @@ interface ResultadoListagem {
   total?: number
   incompleto?: boolean
   dhEmisUltNfce?: string
+  /** CNPJ do certificado (matriz) para distinguir de filiais */
+  cnpj?: string
 }
 
 interface NfeProc {
@@ -93,6 +95,9 @@ declare global {
         selecionarPasta(): Promise<string | null>
         salvarXml(conteudo: string, nomeArquivo: string): Promise<boolean>
         abrirPasta(caminho: string): Promise<void>
+      }
+      app: {
+        setBusy(busy: boolean): void
       }
     }
   }

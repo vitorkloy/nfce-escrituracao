@@ -68,6 +68,12 @@ function formatarCNPJ(cnpj: string): string {
   return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
 }
 
+/** Extrai o CNPJ do emitente da chave de acesso (posições 6–19). */
+function extrairCNPJDaChave(chave: string): string {
+  if (!chave || chave.length < 20) return ''
+  return chave.substring(6, 20)
+}
+
 function formatarData(iso: string): string {
   if (!iso) return '–'
   try { return new Date(iso).toLocaleDateString('pt-BR') } catch { return iso }
@@ -98,6 +104,49 @@ function Badge({ cor, texto }: { cor: 'green' | 'amber' | 'red' | 'teal' | 'gray
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-mono border ${cores[cor]}`}>
       {texto}
     </span>
+  )
+}
+
+function LoadingOverlay({
+  tipo,
+  atual,
+  total,
+  label,
+}: {
+  tipo: 'listagem' | 'lote'
+  atual?: number
+  total?: number
+  label?: string
+}) {
+  const pct = total && total > 0 && typeof atual === 'number' ? Math.round((atual / total) * 100) : 0
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4"
+      style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)', pointerEvents: 'auto' }}
+    >
+      <Spinner size={8} />
+      <div className="flex flex-col items-center gap-2 min-w-[280px]">
+        <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+          {label ?? (tipo === 'listagem' ? 'Buscando chaves…' : 'Baixando XMLs…')}
+        </span>
+        {total != null && total > 0 && (
+          <>
+            <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-raised)' }}>
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{ width: `${pct}%`, background: 'var(--teal)' }}
+              />
+            </div>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              {atual ?? 0} / {total}
+            </span>
+          </>
+        )}
+      </div>
+      <p className="text-xs max-w-xs text-center" style={{ color: 'var(--text-muted)' }}>
+        Não feche a janela — o processo será interrompido.
+      </p>
+    </div>
   )
 }
 
@@ -302,17 +351,23 @@ function PainelConfig({
   const [modo,           setModo]           = useState<ModosCert>('store')
   const [certSelecionado, setCertSelecionado] = useState<CertInfo | null>(null)
   const [testando,       setTestando]       = useState(false)
+  const [senhaVisivel,   setSenhaVisivel]   = useState(false)
+  const [senhaVerificada, setSenhaVerificada] = useState<boolean | null>(null)
 
   function handleSelecionarCert(cert: CertInfo) {
     setCertSelecionado(cert)
     setConfig({ ...config, thumbprint: cert.thumbprint, pfxPath: '', origemStore: true })
+    setSenhaVerificada(null)
   }
 
   async function selecionarArquivo() {
     if (!isElectron) return
     try {
       const caminho = await window.electron.cert.selecionarArquivo()
-      if (caminho) setConfig({ ...config, pfxPath: caminho, thumbprint: undefined, origemStore: false })
+      if (caminho) {
+        setConfig({ ...config, pfxPath: caminho, thumbprint: undefined, origemStore: false })
+        setSenhaVerificada(null)
+      }
     } catch (err) {
       toast('erro', `Erro ao selecionar arquivo: ${err instanceof Error ? err.message : 'Erro desconhecido'}`)
     }
@@ -335,26 +390,32 @@ function PainelConfig({
 
   async function testar() {
     if (!isElectron) { toast('erro', 'Funcionalidade disponível apenas no aplicativo desktop.'); return }
-    if (!config.senha) { toast('erro', 'Informe a senha do certificado.'); return }
 
     if (modo === 'store') {
       if (!config.thumbprint) { toast('erro', 'Selecione um certificado da lista.'); return }
       setTestando(true)
+      setSenhaVerificada(null)
       try {
-        const r = await window.electron.cert.testarStore(config.thumbprint, config.senha)
+        const r = await window.electron.cert.testarStore(config.thumbprint, config.senha || '')
+        setSenhaVerificada(r.ok)
         toast(r.ok ? 'ok' : 'erro', r.mensagem)
       } catch (err) {
+        setSenhaVerificada(false)
         toast('erro', `Erro ao testar: ${err instanceof Error ? err.message : 'Erro desconhecido'}`)
       } finally {
         setTestando(false)
       }
     } else {
+      if (!config.senha) { toast('erro', 'Informe a senha do certificado.'); return }
       if (!config.pfxPath) { toast('erro', 'Selecione o arquivo .pfx.'); return }
       setTestando(true)
+      setSenhaVerificada(null)
       try {
         const r = await window.electron.cert.testar(config.pfxPath, config.senha)
+        setSenhaVerificada(r.ok)
         toast(r.ok ? 'ok' : 'erro', r.mensagem)
       } catch (err) {
+        setSenhaVerificada(false)
         toast('erro', `Erro ao testar: ${err instanceof Error ? err.message : 'Erro desconhecido'}`)
       } finally {
         setTestando(false)
@@ -441,25 +502,82 @@ function PainelConfig({
         </div>
       )}
 
-      {/* Senha */}
-      <div className="mb-5">
-        <label className="block text-xs font-medium mb-2 uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-          Senha do Certificado
-        </label>
-        <input
-          type="password"
-          value={config.senha}
-          onChange={e => setConfig({ ...config, senha: e.target.value })}
-          placeholder="••••••••"
-          className="w-full px-3 py-2.5 rounded text-sm no-drag"
-          style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}
-          autoComplete="new-password"
-          aria-label="Senha do certificado"
-        />
-        <p className="mt-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
-          A senha é usada apenas em memória e não é salva.
-        </p>
-      </div>
+      {/* Senha — apenas para modo arquivo .pfx */}
+      {modo === 'store' ? (
+        <div className="mb-5 px-4 py-3 rounded flex items-center justify-between gap-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-3">
+            <span className="text-lg">🔑</span>
+            <div>
+              <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>Repositório do sistema</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                Senha não necessária — o certificado é acessado diretamente pelo Windows.
+              </p>
+            </div>
+          </div>
+          {certConfigOk && (
+            <button
+              onClick={testar}
+              disabled={testando}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium no-drag shrink-0"
+              style={{ background: 'var(--teal-glow)', border: '1px solid var(--teal-dim)', color: 'var(--teal)' }}
+            >
+              {testando ? <Spinner size={3} /> : 'Verificar'}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="mb-5">
+          <label className="block text-xs font-medium mb-2 uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+            Senha do Certificado
+          </label>
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <input
+                type={senhaVisivel ? 'text' : 'password'}
+                value={config.senha}
+                onChange={e => { setConfig({ ...config, senha: e.target.value }); setSenhaVerificada(null) }}
+                placeholder="••••••••"
+                className="w-full px-3 py-2.5 pr-10 rounded text-sm no-drag"
+                style={{
+                  background: 'var(--bg-raised)',
+                  border: `1px solid ${senhaVerificada === false ? 'var(--red)' : 'var(--border)'}`,
+                }}
+                autoComplete="new-password"
+                aria-label="Senha do certificado"
+              />
+              <button
+                type="button"
+                onClick={() => setSenhaVisivel(v => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded text-xs no-drag"
+                style={{ color: 'var(--text-muted)' }}
+                title={senhaVisivel ? 'Ocultar senha' : 'Mostrar senha'}
+                aria-label={senhaVisivel ? 'Ocultar senha' : 'Mostrar senha'}
+              >
+                {senhaVisivel ? '🙈' : '👁'}
+              </button>
+            </div>
+            <button
+              onClick={testar}
+              disabled={testando || !config.senha || !certConfigOk}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded text-sm font-medium no-drag shrink-0"
+              style={{
+                background: testando ? 'var(--bg-raised)' : 'var(--teal-glow)',
+                border: '1px solid var(--teal-dim)',
+                color: testando ? 'var(--text-muted)' : 'var(--teal)',
+              }}
+            >
+              {testando ? <Spinner size={3} /> : 'Verificar'}
+            </button>
+          </div>
+          <div className="mt-1.5 flex items-center gap-2">
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              A senha é usada apenas em memória e não é salva.
+            </p>
+            {senhaVerificada === true && <span className="text-xs" style={{ color: 'var(--green)' }}>✓ Senha correta</span>}
+            {senhaVerificada === false && <span className="text-xs" style={{ color: 'var(--red)' }}>✕ Senha incorreta</span>}
+          </div>
+        </div>
+      )}
 
       {/* Ambiente */}
       <div className="mb-8">
@@ -483,11 +601,6 @@ function PainelConfig({
 
       {/* Ações */}
       <div className="flex gap-3">
-        <button onClick={testar} disabled={testando || !certConfigOk}
-          className="flex items-center gap-2 px-4 py-2.5 rounded text-sm font-medium transition-all no-drag"
-          style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: certConfigOk ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-          {testando ? <Spinner /> : '◈'} Testar
-        </button>
         <button onClick={salvarConfig} disabled={!certConfigOk}
           className="flex-1 py-2.5 rounded text-sm font-semibold transition-all no-drag"
           style={{ background: certConfigOk ? 'var(--teal)' : 'var(--bg-raised)', color: certConfigOk ? '#000' : 'var(--text-muted)' }}>
@@ -502,7 +615,15 @@ function PainelConfig({
 // Painel: Listagem de Chaves
 // ---------------------------------------------------------------------------
 
-function PainelListagem({ config, toast }: { config: Config; toast: (tipo: ToastInfo['tipo'], msg: string) => void }) {
+function PainelListagem({
+  config,
+  toast,
+  setLoadingState,
+}: {
+  config: Config
+  toast: (tipo: ToastInfo['tipo'], msg: string) => void
+  setLoadingState: (s: { type: 'listagem' | 'lote' | null; atual?: number; total?: number }) => void
+}) {
   const [isElectron] = useIsElectron()
   const hoje      = new Date()
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
@@ -514,22 +635,36 @@ function PainelListagem({ config, toast }: { config: Config; toast: (tipo: Toast
   const [progresso, setProgresso] = useState(0)
   const [chaves,    setChaves]    = useState<ChaveItem[]>([])
   const [filtro,    setFiltro]    = useState('')
+  const [cnpjCertificado, setCnpjCertificado] = useState<string>('')
+  const [filtroEmitente, setFiltroEmitente] = useState<'todos' | 'matriz' | 'filiais' | string>('todos')
+  useEffect(() => {
+    if (!isElectron) return
+    const remover = window.electron.sefaz.onProgressoListagem((total) => {
+      setProgresso(total)
+      if (buscando) setLoadingState({ type: 'listagem', total })
+    })
+    return remover
+  }, [isElectron, buscando, setLoadingState])
 
   useEffect(() => {
     if (!isElectron) return
-    const remover = window.electron.sefaz.onProgressoListagem((total) => setProgresso(total))
+    const remover = window.electron.sefaz.onProgressoLote((info) => {
+      setLoadingState({ type: 'lote', atual: info.atual, total: info.total })
+    })
     return remover
-  }, [isElectron])
+  }, [isElectron, setLoadingState])
 
   async function buscar() {
     if (!isElectron) { toast('erro', 'Funcionalidade disponível apenas no aplicativo desktop.'); return }
-    if (!config.senha)  { toast('erro', 'Configure a senha do certificado primeiro.'); return }
+    if (!config.origemStore && !config.senha) { toast('erro', 'Configure a senha do certificado primeiro.'); return }
     if (!config.thumbprint && !config.pfxPath) { toast('erro', 'Selecione um certificado na aba Configuração.'); return }
     if (!dtInicial) { toast('erro', 'Informe a data inicial.'); return }
 
     setBuscando(true)
     setProgresso(0)
     setChaves([])
+    setLoadingState({ type: 'listagem', total: 0 })
+    if (isElectron && window.electron?.app) window.electron.app.setBusy(true)
 
     try {
       const r = await window.electron.sefaz.listarChaves(
@@ -546,6 +681,8 @@ function PainelListagem({ config, toast }: { config: Config; toast: (tipo: Toast
 
       const itens: ChaveItem[] = (r.chaves ?? []).map(ch => ({ chave: ch, selecionada: false }))
       setChaves(itens)
+      setCnpjCertificado((r as { cnpj?: string }).cnpj ?? '')
+      setFiltroEmitente('todos')
 
       if (itens.length === 0) {
         toast('info', 'Nenhuma NFC-e encontrada no período informado.')
@@ -556,6 +693,8 @@ function PainelListagem({ config, toast }: { config: Config; toast: (tipo: Toast
       toast('erro', `Erro inesperado: ${err instanceof Error ? err.message : 'Tente novamente.'}`)
     } finally {
       setBuscando(false)
+      setLoadingState({ type: null })
+      if (isElectron && window.electron?.app) window.electron.app.setBusy(false)
     }
   }
 
@@ -564,12 +703,36 @@ function PainelListagem({ config, toast }: { config: Config; toast: (tipo: Toast
   }
 
   function toggleTodas() {
-    const todas = chaves.every(c => c.selecionada)
-    setChaves(prev => prev.map(c => ({ ...c, selecionada: !todas })))
+    const todasVisiveisSelecionadas = visiveis.length > 0 && visiveis.every(c => c.selecionada)
+    const visiveisSet = new Set(visiveis.map(v => v.chave))
+    setChaves(prev => prev.map(c =>
+      visiveisSet.has(c.chave) ? { ...c, selecionada: !todasVisiveisSelecionadas } : c
+    ))
   }
 
   const selecionadas = chaves.filter(c => c.selecionada)
-  const visiveis     = filtro ? chaves.filter(c => c.chave.includes(filtro)) : chaves
+  const cnpjNorm     = cnpjCertificado.replace(/\D/g, '')
+
+  // Contagem por emitente (Matriz vs Filiais)
+  const contagemPorCNPJ = chaves.reduce<Record<string, number>>((acc, c) => {
+    const cnpj = extrairCNPJDaChave(c.chave)
+    if (cnpj) acc[cnpj] = (acc[cnpj] ?? 0) + 1
+    return acc
+  }, {})
+  const cnpjsUnicos = Object.keys(contagemPorCNPJ).sort()
+  const qtdMatriz  = cnpjNorm ? (contagemPorCNPJ[cnpjNorm] ?? 0) : 0
+  const qtdFiliais = cnpjsUnicos.filter(c => c !== cnpjNorm).reduce((s, c) => s + (contagemPorCNPJ[c] ?? 0), 0)
+
+  const passaFiltroEmitente = (chave: string) => {
+    const cnpjChave = extrairCNPJDaChave(chave)
+    if (filtroEmitente === 'todos') return true
+    if (filtroEmitente === 'matriz') return cnpjNorm && cnpjChave === cnpjNorm
+    if (filtroEmitente === 'filiais') return cnpjNorm && cnpjChave !== cnpjNorm
+    return cnpjChave === filtroEmitente
+  }
+
+  const baseFiltro = filtro ? chaves.filter(c => c.chave.includes(filtro)) : chaves
+  const visiveis   = baseFiltro.filter(c => passaFiltroEmitente(c.chave))
 
   async function downloadLote() {
     if (!isElectron) return
@@ -586,6 +749,8 @@ function PainelListagem({ config, toast }: { config: Config; toast: (tipo: Toast
     if (!pasta) return
 
     toast('info', `Iniciando download de ${selecionadas.length} XMLs…`)
+    setLoadingState({ type: 'lote', atual: 0, total: selecionadas.length })
+    if (isElectron && window.electron?.app) window.electron.app.setBusy(true)
 
     try {
       const resultado = await window.electron.sefaz.downloadLote(
@@ -609,6 +774,9 @@ function PainelListagem({ config, toast }: { config: Config; toast: (tipo: Toast
       }
     } catch (err) {
       toast('erro', `Falha no download em lote: ${err instanceof Error ? err.message : 'Erro'}`)
+    } finally {
+      setLoadingState({ type: null })
+      if (isElectron && window.electron?.app) window.electron.app.setBusy(false)
     }
   }
 
@@ -617,7 +785,7 @@ function PainelListagem({ config, toast }: { config: Config; toast: (tipo: Toast
       <div className="p-6 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
         <h2 className="text-xl font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Listagem de Chaves</h2>
 
-        {!config.senha && (config.thumbprint || config.pfxPath) && (
+        {!config.origemStore && !config.senha && config.pfxPath && (
           <div
             className="mb-4 px-4 py-3 rounded flex items-center gap-3"
             style={{ background: 'var(--amber)', color: '#000', border: '1px solid var(--amber)' }}
@@ -627,7 +795,7 @@ function PainelListagem({ config, toast }: { config: Config; toast: (tipo: Toast
             <div>
               <p className="font-medium">Senha do certificado não informada</p>
               <p className="text-sm opacity-90">
-                A senha não é salva por segurança. Vá na aba <strong>Certificado</strong>, informe a senha do e-CNPJ e clique em Testar antes de buscar.
+                Com arquivo .pfx, a senha é obrigatória. Vá na aba <strong>Certificado</strong>, informe a senha e clique em Verificar antes de buscar.
               </p>
             </div>
           </div>
@@ -661,20 +829,58 @@ function PainelListagem({ config, toast }: { config: Config; toast: (tipo: Toast
       </div>
 
       {chaves.length > 0 && (
-        <div className="flex items-center gap-3 px-6 py-3" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
-          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            {chaves.length} chaves
-            {selecionadas.length > 0 && <> · <span style={{ color: 'var(--teal)' }}>{selecionadas.length} selecionadas</span></>}
-          </span>
-          <input type="text" value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Filtrar chaves…"
-            className="px-3 py-1.5 rounded text-xs no-drag w-56"
-            style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }} />
-          {selecionadas.length > 0 && (
-            <button onClick={downloadLote}
-              className="flex items-center gap-1.5 ml-auto px-4 py-1.5 rounded text-xs font-semibold no-drag"
-              style={{ background: 'var(--teal-glow)', border: '1px solid var(--teal-dim)', color: 'var(--teal)' }}>
-              ↓ Baixar XMLs ({selecionadas.length})
-            </button>
+        <div className="flex flex-col gap-2 px-6 py-3" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {chaves.length} chaves
+              {selecionadas.length > 0 && <> · <span style={{ color: 'var(--teal)' }}>{selecionadas.length} selecionadas</span></>}
+            </span>
+            {cnpjNorm && (
+              <select
+                value={filtroEmitente}
+                onChange={e => setFiltroEmitente(e.target.value)}
+                className="px-3 py-1.5 rounded text-xs no-drag"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                aria-label="Filtrar por emitente"
+              >
+                <option value="todos">Todas</option>
+                <option value="matriz">Só Matriz</option>
+                <option value="filiais">Só Filiais</option>
+                {cnpjsUnicos.filter(c => c !== cnpjNorm).map(cnpj => (
+                  <option key={cnpj} value={cnpj}>Filial {formatarCNPJ(cnpj)}</option>
+                ))}
+              </select>
+            )}
+            <input type="text" value={filtro} onChange={e => setFiltro(e.target.value)} placeholder="Filtrar chaves…"
+              className="px-3 py-1.5 rounded text-xs no-drag w-56"
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }} />
+            {selecionadas.length > 0 && (
+              <div className="flex items-center gap-3 ml-auto">
+                {cnpjNorm && (() => {
+                  const selMatriz = selecionadas.filter(c => extrairCNPJDaChave(c.chave) === cnpjNorm).length
+                  const selFiliais = selecionadas.length - selMatriz
+                  const partes: string[] = []
+                  if (selMatriz > 0) partes.push(`${selMatriz} Matriz`)
+                  if (selFiliais > 0) partes.push(`${selFiliais} Filiais`)
+                  return partes.length > 0 ? (
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{partes.join(' · ')}</span>
+                  ) : null
+                })()}
+                <button onClick={downloadLote}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded text-xs font-semibold no-drag"
+                  style={{ background: 'var(--teal-glow)', border: '1px solid var(--teal-dim)', color: 'var(--teal)' }}>
+                  ↓ Baixar XMLs ({selecionadas.length})
+                </button>
+              </div>
+            )}
+          </div>
+          {cnpjNorm && (
+            <div className="flex flex-wrap gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+              {qtdMatriz > 0 && <span>{qtdMatriz} Matriz</span>}
+              {cnpjsUnicos.filter(c => c !== cnpjNorm).map(cnpj => (
+                <span key={cnpj}>{contagemPorCNPJ[cnpj] ?? 0} Filial {formatarCNPJ(cnpj)}</span>
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -691,24 +897,40 @@ function PainelListagem({ config, toast }: { config: Config; toast: (tipo: Toast
             <thead>
               <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
                 <th className="px-4 py-3 text-left w-10">
-                  <input type="checkbox" checked={chaves.length > 0 && chaves.every(c => c.selecionada)} onChange={toggleTodas} aria-label="Selecionar todas" />
+                  <input type="checkbox" checked={visiveis.length > 0 && visiveis.every(c => c.selecionada)} onChange={toggleTodas} aria-label="Selecionar todas" />
                 </th>
-                <th className="px-4 py-3 text-left text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>#</th>
+                <th className="px-4 py-3 text-left text-xs uppercase tracking-widest w-12" style={{ color: 'var(--text-muted)' }}>#</th>
                 <th className="px-4 py-3 text-left text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Chave de Acesso</th>
+                {cnpjNorm && (
+                  <th className="px-4 py-3 text-left text-xs uppercase tracking-widest w-40" style={{ color: 'var(--text-muted)' }}>Emitente</th>
+                )}
               </tr>
             </thead>
             <tbody>
-              {visiveis.map((item, i) => (
-                <tr key={item.chave} className="transition-colors cursor-pointer"
-                  style={{ borderBottom: '1px solid var(--border)', background: item.selecionada ? 'var(--teal-glow)' : i % 2 === 0 ? 'transparent' : 'var(--bg-surface)' }}
-                  onClick={() => toggleSelecionada(item.chave)}>
-                  <td className="px-4 py-2.5">
-                    <input type="checkbox" checked={item.selecionada} onChange={() => {}} aria-label={`Selecionar chave ${item.chave}`} />
-                  </td>
-                  <td className="px-4 py-2.5 tabular-nums" style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{i + 1}</td>
-                  <td className="px-4 py-2.5 chave-acesso">{formatarChave(item.chave)}</td>
-                </tr>
-              ))}
+              {visiveis.map((item, i) => {
+                const cnpjChave = extrairCNPJDaChave(item.chave)
+                const ehMatriz = cnpjNorm && cnpjChave === cnpjNorm
+                return (
+                  <tr key={item.chave} className="transition-colors cursor-pointer"
+                    style={{ borderBottom: '1px solid var(--border)', background: item.selecionada ? 'var(--teal-glow)' : i % 2 === 0 ? 'transparent' : 'var(--bg-surface)' }}
+                    onClick={() => toggleSelecionada(item.chave)}>
+                    <td className="px-4 py-2.5">
+                      <input type="checkbox" checked={item.selecionada} onChange={() => {}} aria-label={`Selecionar chave ${item.chave}`} />
+                    </td>
+                    <td className="px-4 py-2.5 tabular-nums" style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{i + 1}</td>
+                    <td className="px-4 py-2.5 chave-acesso">{formatarChave(item.chave)}</td>
+                    {cnpjNorm && (
+                      <td className="px-4 py-2.5">
+                        {ehMatriz ? (
+                          <Badge cor="green" texto="Matriz" />
+                        ) : (
+                          <Badge cor="teal" texto={`Filial ${formatarCNPJ(cnpjChave)}`} />
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
@@ -735,7 +957,7 @@ function PainelDownload({ config, toast }: { config: Config; toast: (tipo: Toast
   async function baixar() {
     const limpa = chave.replace(/\s/g, '')
     if (!/^\d{44}$/.test(limpa)) { toast('erro', 'A chave de acesso deve ter exatamente 44 dígitos numéricos.'); return }
-    if (!config.senha)            { toast('erro', 'Configure a senha do certificado primeiro.'); return }
+    if (!config.origemStore && !config.senha) { toast('erro', 'Configure a senha do certificado primeiro.'); return }
     if (!isElectron)              { toast('erro', 'Funcionalidade disponível apenas no aplicativo desktop.'); return }
 
     setCarregando(true)
@@ -772,7 +994,7 @@ function PainelDownload({ config, toast }: { config: Config; toast: (tipo: Toast
       <div className="p-6 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
         <h2 className="text-xl font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Download de XML</h2>
 
-        {!config.senha && (config.thumbprint || config.pfxPath) && (
+        {!config.origemStore && !config.senha && config.pfxPath && (
           <div
             className="mb-4 px-4 py-3 rounded flex items-center gap-3"
             style={{ background: 'var(--amber)', color: '#000', border: '1px solid var(--amber)' }}
@@ -782,7 +1004,7 @@ function PainelDownload({ config, toast }: { config: Config; toast: (tipo: Toast
             <div>
               <p className="font-medium">Senha do certificado não informada</p>
               <p className="text-sm opacity-90">
-                Vá na aba <strong>Certificado</strong>, informe a senha do e-CNPJ e clique em Testar antes de baixar.
+                Com arquivo .pfx, a senha é obrigatória. Vá na aba <strong>Certificado</strong>, informe a senha e clique em Verificar antes de baixar.
               </p>
             </div>
           </div>
@@ -889,6 +1111,7 @@ export default function Home() {
     pfxPath: '', thumbprint: undefined, origemStore: true, senha: '', ambiente: 'homologacao',
   })
   const [toasts,  setToasts]  = useState<ToastInfo[]>([])
+  const [loadingState, setLoadingState] = useState<{ type: 'listagem' | 'lote' | null; atual?: number; total?: number }>({ type: null })
   const toastId = useRef(0)
 
   // Carrega configuração salva ao iniciar
@@ -919,7 +1142,7 @@ export default function Home() {
     { id: 'download' as Aba, label: 'Download XML',  icon: '↓' },
   ]
 
-  const configOk = !!(config.senha && (config.thumbprint || config.pfxPath))
+  const configOk = (config.origemStore && !!config.thumbprint) || (!config.origemStore && !!config.pfxPath && !!config.senha)
 
   return (
     <div className="flex h-screen" style={{ background: 'var(--bg-deep)', userSelect: 'none' }}>
@@ -970,12 +1193,21 @@ export default function Home() {
         <div className="drag-region h-8 shrink-0" style={{ background: 'var(--bg-base)' }} />
         <div className="flex-1 overflow-hidden">
           {aba === 'config'   && <div className="h-full overflow-auto"><PainelConfig  config={config} setConfig={setConfig} toast={toast} /></div>}
-          {aba === 'listagem' && <div className="h-full flex flex-col overflow-hidden"><PainelListagem config={config} toast={toast} /></div>}
+          {aba === 'listagem' && <div className="h-full flex flex-col overflow-hidden"><PainelListagem config={config} toast={toast} setLoadingState={setLoadingState} /></div>}
           {aba === 'download' && <div className="h-full flex flex-col overflow-hidden"><PainelDownload config={config} toast={toast} /></div>}
         </div>
       </main>
 
       <Toast toasts={toasts} remover={id => setToasts(prev => prev.filter(t => t.id !== id))} />
+
+      {loadingState.type && (
+        <LoadingOverlay
+          tipo={loadingState.type}
+          atual={loadingState.atual}
+          total={loadingState.total}
+          label={loadingState.type === 'listagem' ? 'Buscando chaves…' : 'Baixando XMLs…'}
+        />
+      )}
     </div>
   )
 }

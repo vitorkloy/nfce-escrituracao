@@ -60,4 +60,8 @@ contextBridge.exposeInMainWorld('electron', {
     salvarXml:        (c: string, n: string)            => ipcRenderer.invoke('fs:salvar-xml', c, n),
     abrirPasta:       (caminho: string)                 => ipcRenderer.invoke('fs:abrir-pasta', caminho),
   },
+
+  app: {
+    setBusy: (busy: boolean) => ipcRenderer.send('app:set-busy', busy),
+  },
 })

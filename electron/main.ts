@@ -40,6 +40,7 @@ const store = new Store<StoreSchema>()
 // ---------------------------------------------------------------------------
 
 let mainWindow: BrowserWindow | null = null
+let downloadEmAndamento = false
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -72,6 +73,24 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => { mainWindow = null })
 
+  mainWindow.on('close', (e) => {
+    if (downloadEmAndamento) {
+      e.preventDefault()
+      const resp = dialog.showMessageBoxSync(mainWindow!, {
+        type: 'question',
+        buttons: ['Cancelar', 'Sair mesmo assim'],
+        defaultId: 0,
+        title: 'Download em andamento',
+        message: 'Se você sair agora, o download será interrompido.',
+        detail: 'Tem certeza que deseja fechar?',
+      })
+      if (resp === 1) {
+        downloadEmAndamento = false
+        mainWindow?.destroy()
+      }
+    }
+  })
+
   // Log erros de render não capturados
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     console.error('[Electron] Processo de render encerrado:', details)
@@ -87,6 +106,30 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('before-quit', (e) => {
+  if (downloadEmAndamento) {
+    e.preventDefault()
+    const win = mainWindow ?? BrowserWindow.getFocusedWindow()
+    if (!win) return
+    const resp = dialog.showMessageBoxSync(win, {
+      type: 'question',
+      buttons: ['Cancelar', 'Sair mesmo assim'],
+      defaultId: 0,
+      title: 'Download em andamento',
+      message: 'Se você sair agora, o download será interrompido.',
+      detail: 'Tem certeza que deseja fechar?',
+    })
+    if (resp === 1) {
+      downloadEmAndamento = false
+      app.quit()
+    }
+  }
+})
+
+ipcMain.on('app:set-busy', (_e, busy: boolean) => {
+  downloadEmAndamento = !!busy
 })
 
 // Captura exceções não tratadas no processo principal
@@ -418,16 +461,59 @@ function validarSenhaPfx(pfxPath: string, senha: string): void {
   }
 }
 
+/**
+ * Extrai o CNPJ do certificado em arquivo .pfx usando OpenSSL (se disponível).
+ * Retorna string vazia se OpenSSL não estiver instalado ou a extração falhar.
+ */
+async function extrairCNPJDoPfx(pfxPath: string, senha: string): Promise<string> {
+  try {
+    const passFile = path.join(os.tmpdir(), `nfce_cnpj_pass_${Date.now()}.txt`)
+    fs.writeFileSync(passFile, senha, { mode: 0o600 })
+    try {
+      const pfxEscaped = pfxPath.replace(/\\/g, '/')
+      const passEscaped = passFile.replace(/\\/g, '/')
+      const passArg = passEscaped.includes(' ') ? `file:"${passEscaped}"` : `file:${passEscaped}`
+      const inArg = pfxEscaped.includes(' ') ? `"${pfxEscaped}"` : pfxEscaped
+      const cmd = process.platform === 'win32'
+        ? `openssl pkcs12 -in ${inArg} -clcerts -nokeys -passin ${passArg} 2>nul | openssl x509 -noout -subject`
+        : `openssl pkcs12 -in ${inArg} -clcerts -nokeys -passin ${passArg} 2>/dev/null | openssl x509 -noout -subject`
+      const { stdout } = await execAsync(cmd)
+      return extrairCNPJ(stdout || '')
+    } finally {
+      try { fs.unlinkSync(passFile) } catch { /* ignora */ }
+    }
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Retorna o CNPJ do certificado configurado (matriz) para distinguir de filiais.
+ */
+async function obterCNPJDoCertificado(config: { thumbprint?: string; pfxPath?: string; senha?: string; origemStore?: boolean }): Promise<string> {
+  if (config.thumbprint && config.origemStore) {
+    const certs = await listarCertificadosSistema()
+    const cert = certs.find(c => c.thumbprint.toUpperCase() === (config.thumbprint ?? '').toUpperCase())
+    return cert?.cnpj ?? ''
+  }
+  if (config.pfxPath && config.senha) {
+    return extrairCNPJDoPfx(config.pfxPath, config.senha)
+  }
+  return ''
+}
+
 // ---------------------------------------------------------------------------
 // Utilitário: resolve pfxPath — exporta do store se necessário
 // ---------------------------------------------------------------------------
 
 async function resolverPfx(
   config: ConfigCert & { thumbprint?: string }
-): Promise<{ pfxPath: string; tmpCriado: boolean }> {
+): Promise<{ pfxPath: string; tmpCriado: boolean; senha: string }> {
   if (config.thumbprint && process.platform === 'win32') {
-    const pfxPath = await exportarCertWindows(config.thumbprint, config.senha)
-    return { pfxPath, tmpCriado: true }
+    // Repositório: senha não é necessária — usamos placeholder para o PFX temporário
+    const senha = config.senha || `nfce_temp_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    const pfxPath = await exportarCertWindows(config.thumbprint, senha)
+    return { pfxPath, tmpCriado: true, senha }
   }
 
   if (!config.pfxPath) {
@@ -438,7 +524,7 @@ async function resolverPfx(
     throw new Error(`Arquivo de certificado não encontrado: "${config.pfxPath}". Reconfigure o certificado.`)
   }
 
-  return { pfxPath: config.pfxPath, tmpCriado: false }
+  return { pfxPath: config.pfxPath, tmpCriado: false, senha: config.senha }
 }
 
 // ---------------------------------------------------------------------------
@@ -458,14 +544,14 @@ ipcMain.handle('cert:testar-store', async (_e, thumbprint: string, senha: string
   let tmpPath: string | null = null
   try {
     validarThumbprint(thumbprint)
-    if (!senha) throw new Error('Informe a senha do certificado.')
+    // Repositório: senha não é necessária — usamos placeholder
+    const senhaExport = senha || `nfce_temp_${Date.now()}`
 
     if (process.platform === 'win32') {
-      tmpPath = await exportarCertWindows(thumbprint, senha)
-      // Valida que o .pfx exportado abre corretamente com a senha fornecida
-      validarSenhaPfx(tmpPath, senha)
+      tmpPath = await exportarCertWindows(thumbprint, senhaExport)
+      validarSenhaPfx(tmpPath, senhaExport)
     }
-    return { ok: true, mensagem: 'Certificado e senha validados com sucesso.' }
+    return { ok: true, mensagem: 'Certificado do repositório validado com sucesso.' }
   } catch (err: unknown) {
     return { ok: false, mensagem: mensagemErro(err) }
   } finally {
@@ -536,7 +622,7 @@ ipcMain.handle(
   'sefaz:listar-chaves',
   async (
     _e,
-    config: ConfigCert & { thumbprint?: string },
+    config: ConfigCert & { thumbprint?: string; origemStore?: boolean },
     dataInicial: string,
     dataFinal: string | undefined,
     paginacaoAuto: boolean
@@ -550,16 +636,19 @@ ipcMain.handle(
       pfxPath   = resolved.pfxPath
       tmpCriado = resolved.tmpCriado
 
-      const cfg = { ...config, pfxPath }
+      const cfg = { ...config, pfxPath, senha: resolved.senha }
+
+      // CNPJ da matriz (certificado) para distinguir de filiais na interface
+      const cnpj = await obterCNPJDoCertificado(config)
 
       if (paginacaoAuto) {
         const chaves = await listarTodasChaves(cfg, dataInicial, dataFinal, (parcial) => {
           mainWindow?.webContents.send('sefaz:progresso-listagem', parcial)
         })
-        return { ok: true, chaves, total: chaves.length }
+        return { ok: true, chaves, total: chaves.length, cnpj }
       } else {
         const resultado: ResultadoListagem = await listarChaves(cfg, dataInicial, dataFinal)
-        return { ok: true, ...resultado }
+        return { ok: true, ...resultado, cnpj }
       }
     } catch (err: unknown) {
       return respostaErro(err)
@@ -584,7 +673,7 @@ ipcMain.handle(
       pfxPath   = resolved.pfxPath
       tmpCriado = resolved.tmpCriado
 
-      const resultado: ResultadoDownload = await downloadXml({ ...config, pfxPath }, chave)
+      const resultado: ResultadoDownload = await downloadXml({ ...config, pfxPath, senha: resolved.senha }, chave)
       return { ok: true, ...resultado }
     } catch (err: unknown) {
       return respostaErro(err)
@@ -623,7 +712,7 @@ ipcMain.handle(
       pfxPath   = resolved.pfxPath
       tmpCriado = resolved.tmpCriado
 
-      const cfg = { ...config, pfxPath }
+      const cfg = { ...config, pfxPath, senha: resolved.senha }
 
       for (let i = 0; i < chaves.length; i++) {
         const chave = chaves[i]
