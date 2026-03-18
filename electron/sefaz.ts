@@ -216,8 +216,11 @@ function soapEnvelope(acao: string, xmlCorpo: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// POST SOAP — com tratamento de erros de rede
+// POST SOAP — com tratamento de erros de rede e retry para falhas transitórias
 // ---------------------------------------------------------------------------
+
+/** Códigos de erro que podem ser transitórios — vale tentar novamente */
+const ERROS_RETRY = new Set(['ECONNRESET', 'EPIPE', 'ETIMEDOUT', 'ENOTFOUND'])
 
 async function postSoap(
   url: string,
@@ -227,6 +230,7 @@ async function postSoap(
 ): Promise<string> {
   const envelope = soapEnvelope(acao, xmlCorpo)
   const debug = process.env.DEBUG === 'sefaz'
+  const maxTentativas = 3
 
   if (debug) {
     console.log(`[SEFAZ] POST ${url}`)
@@ -234,24 +238,36 @@ async function postSoap(
     console.log(`[SEFAZ] Envelope:\n${envelope}`)
   }
 
-  try {
-    const resp = await axios.post(url, envelope, {
-      headers: {
-        // Conforme documentação SEFAZ-SP: sem action no Content-Type
-        'Content-Type': 'application/soap+xml; charset=utf-8',
-      },
-      httpsAgent: agente,
-      timeout: 60_000,
-      responseType: 'text',
-    })
-    if (!resp.data || typeof resp.data !== 'string') {
-      throw new SefazParseError(`Resposta vazia do serviço "${acao}"`)
+  let ultimoErro: unknown
+  for (let t = 1; t <= maxTentativas; t++) {
+    try {
+      const resp = await axios.post(url, envelope, {
+        headers: {
+          'Content-Type': 'application/soap+xml; charset=utf-8',
+        },
+        httpsAgent: agente,
+        timeout: 60_000,
+        responseType: 'text',
+      })
+      if (!resp.data || typeof resp.data !== 'string') {
+        throw new SefazParseError(`Resposta vazia do serviço "${acao}"`)
+      }
+      if (debug) console.log(`[SEFAZ] Resposta HTTP ${resp.status}:\n${resp.data}`)
+      return resp.data
+    } catch (err) {
+      ultimoErro = err
+      const code = err instanceof AxiosError ? err.code : null
+      const podeRetry = code && ERROS_RETRY.has(code) && t < maxTentativas
+      if (podeRetry) {
+        const delay = t * 2000
+        if (debug) console.warn(`[SEFAZ] ${code} — tentativa ${t}/${maxTentativas}, aguardando ${delay}ms`)
+        await new Promise(r => setTimeout(r, delay))
+      } else {
+        throw tratarErroSoap(err, acao, envelope)
+      }
     }
-    if (debug) console.log(`[SEFAZ] Resposta HTTP ${resp.status}:\n${resp.data}`)
-    return resp.data
-  } catch (err) {
-    throw tratarErroSoap(err, acao, envelope)
   }
+  throw tratarErroSoap(ultimoErro, acao, envelope)
 }
 
 function tratarErroSoap(err: unknown, acao: string, envelope: string): SefazNetworkError | SefazParseError {
@@ -276,6 +292,17 @@ function tratarErroSoap(err: unknown, acao: string, envelope: string): SefazNetw
     if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
       return new SefazNetworkError(
         `Não foi possível conectar à SEFAZ-SP (${acao}). Verifique sua conexão com a internet.`,
+        err
+      )
+    }
+    if (err.code === 'ECONNRESET' || err.code === 'EPIPE') {
+      const url = (err as AxiosError).config?.url ?? ''
+      const emProducao = url.includes('nfce.fazenda.sp.gov.br') && !url.includes('homologacao')
+      const dica = emProducao
+        ? ' Em produção: confira se o certificado está autorizado para produção e se o firewall não bloqueia a SEFAZ-SP.'
+        : ''
+      return new SefazNetworkError(
+        `Conexão interrompida pela SEFAZ-SP (${acao}).${dica} Tente novamente.`,
         err
       )
     }
