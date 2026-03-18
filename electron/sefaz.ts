@@ -114,7 +114,7 @@ export class SefazParseError extends Error {
 // Criação do agente HTTPS com mTLS usando o .pfx
 // ---------------------------------------------------------------------------
 
-function criarAgente(pfxPath: string, senha: string): https.Agent {
+export function criarAgente(pfxPath: string, senha: string): https.Agent {
   let pfxBuffer: Buffer
 
   try {
@@ -154,12 +154,11 @@ function criarAgente(pfxPath: string, senha: string): https.Agent {
 // Validações de entrada
 // ---------------------------------------------------------------------------
 
-// NT 2026: dataHoraInicial/dataHoraFinal = AAAA-MM-DDThh:mm (exatamente 16 caracteres)
 const REGEX_DATA_HORA = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
 
 function validarDataHora(valor: string, campo: string): void {
   if (!REGEX_DATA_HORA.test(valor)) {
-    throw new Error(`${campo} inválido: esperado "AAAA-MM-DDThh:mm" (16 caracteres), recebido "${valor}"`)
+    throw new Error(`${campo} inválido: esperado formato "AAAA-MM-DDThh:mm", recebido "${valor}"`)
   }
 }
 
@@ -174,8 +173,8 @@ function validarChave(chave: string): void {
 // ---------------------------------------------------------------------------
 
 function xmlListagem(tpAmb: string, dataInicial: string, dataFinal?: string): string {
-  // NT 2026: nfceListagemChaves no namespace NFe (portalfiscal.inf.br/nfe)
-  let body = `<nfceListagemChaves xmlns="${NAMESPACE}" versao="${VERSAO}">`
+  // Namespace declarado no nfeDadosMsg pai — não repetir aqui para evitar conflito
+  let body = `<nfceListagemChaves versao="${VERSAO}">`
   body += `<tpAmb>${tpAmb}</tpAmb>`
   body += `<dataHoraInicial>${dataInicial}</dataHoraInicial>`
   if (dataFinal) body += `<dataHoraFinal>${dataFinal}</dataHoraFinal>`
@@ -185,7 +184,7 @@ function xmlListagem(tpAmb: string, dataInicial: string, dataFinal?: string): st
 
 function xmlDownload(tpAmb: string, chave: string): string {
   return (
-    `<nfceDownloadXML xmlns="${NAMESPACE}" versao="${VERSAO}">` +
+    `<nfceDownloadXML versao="${VERSAO}">` +
     `<tpAmb>${tpAmb}</tpAmb>` +
     `<chNFCe>${chave}</chNFCe>` +
     `</nfceDownloadXML>`
@@ -193,34 +192,24 @@ function xmlDownload(tpAmb: string, chave: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Envelope SOAP
+// Envelope SOAP 1.1
 // ---------------------------------------------------------------------------
 
-/** Namespace do nfeDadosMsg conforme documentação SEFAZ-SP (NT 2026) */
-const NAMESPACE_WSDL: Record<string, string> = {
-  nfceListagemChaves: 'NFCeListagemChaves',
-  nfceDownloadXML: 'NFCeDownloadXML',
-}
-
 function soapEnvelope(acao: string, xmlCorpo: string): string {
-  const ns = NAMESPACE_WSDL[acao] ?? acao
-  // Conforme documentação oficial: nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFCeListagemChaves"
+  // SEFAZ-SP usa SOAP 1.2 — namespace diferente do SOAP 1.1
   return `<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                 xmlns:xsd="http://www.w3.org/2001/XMLSchema"
-                 xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+<soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"
+                 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <soap12:Body>
-    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/${ns}">${xmlCorpo}</nfeDadosMsg>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/${acao}">${xmlCorpo}</nfeDadosMsg>
   </soap12:Body>
 </soap12:Envelope>`
 }
 
 // ---------------------------------------------------------------------------
-// POST SOAP — com tratamento de erros de rede e retry para falhas transitórias
+// POST SOAP — com tratamento de erros de rede
 // ---------------------------------------------------------------------------
-
-/** Códigos de erro que podem ser transitórios — vale tentar novamente */
-const ERROS_RETRY = new Set(['ECONNRESET', 'EPIPE', 'ETIMEDOUT', 'ENOTFOUND'])
 
 async function postSoap(
   url: string,
@@ -229,183 +218,147 @@ async function postSoap(
   agente: https.Agent
 ): Promise<string> {
   const envelope = soapEnvelope(acao, xmlCorpo)
-  const debug = process.env.DEBUG === 'sefaz'
-  const maxTentativas = 3
 
+  const debug = process.env.DEBUG === 'sefaz'
   if (debug) {
     console.log(`[SEFAZ] POST ${url}`)
-    console.log(`[SEFAZ] Content-Type: application/soap+xml; charset=utf-8`)
     console.log(`[SEFAZ] Envelope:\n${envelope}`)
   }
 
+  // Erros de rede transitórios — vale tentar novamente
+  const ERROS_RETRY = new Set(['ECONNRESET', 'EPIPE', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNABORTED'])
+  const MAX_TENTATIVAS = 3
   let ultimoErro: unknown
-  for (let t = 1; t <= maxTentativas; t++) {
+
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
     try {
       const resp = await axios.post(url, envelope, {
         headers: {
-          'Content-Type': 'application/soap+xml; charset=utf-8',
+          'Content-Type': `application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/${acao}/nfeDadosMsg"`,
         },
         httpsAgent: agente,
         timeout: 60_000,
         responseType: 'text',
       })
+
       if (!resp.data || typeof resp.data !== 'string') {
         throw new SefazParseError(`Resposta vazia do serviço "${acao}"`)
       }
+
       if (debug) console.log(`[SEFAZ] Resposta HTTP ${resp.status}:\n${resp.data}`)
       return resp.data
+
     } catch (err) {
       ultimoErro = err
-      const code = err instanceof AxiosError ? err.code : null
-      const podeRetry = code && ERROS_RETRY.has(code) && t < maxTentativas
-      if (podeRetry) {
-        const delay = t * 2000
-        if (debug) console.warn(`[SEFAZ] ${code} — tentativa ${t}/${maxTentativas}, aguardando ${delay}ms`)
-        await new Promise(r => setTimeout(r, delay))
-      } else {
-        throw tratarErroSoap(err, acao, envelope)
+
+      if (err instanceof SefazParseError || err instanceof SefazNetworkError) throw err
+
+      if (err instanceof AxiosError) {
+        const code = err.code ?? ''
+
+        // Erros transitórios: faz retry com backoff
+        if (ERROS_RETRY.has(code) && tentativa < MAX_TENTATIVAS) {
+          const delay = tentativa * 2000
+          if (debug) console.warn(`[SEFAZ] ${code} — retry ${tentativa}/${MAX_TENTATIVAS - 1}, aguardando ${delay}ms`)
+          await new Promise(r => setTimeout(r, delay))
+          continue
+        }
+
+        // Classifica e lança erro descritivo
+        if (code === 'ECONNABORTED' || code === 'ETIMEDOUT') {
+          throw new SefazNetworkError(
+            `Timeout ao conectar à SEFAZ-SP (${acao}). Verifique sua conexão e tente novamente.`, err)
+        }
+        if (code === 'ECONNREFUSED' || code === 'ENOTFOUND') {
+          throw new SefazNetworkError(
+            `Não foi possível conectar à SEFAZ-SP (${acao}). Verifique sua conexão com a internet.`, err)
+        }
+        if (code === 'ECONNRESET' || code === 'EPIPE') {
+          throw new SefazNetworkError(
+            `Conexão interrompida pela SEFAZ-SP (${acao}). Tente novamente.`, err)
+        }
+        if (err.response) {
+          const status = err.response.status
+          if (status === 401 || status === 403) {
+            throw new SefazNetworkError(
+              `Acesso negado pelo servidor (HTTP ${status}). Verifique o certificado digital.`, err)
+          }
+          if (status === 500) {
+            const body = err.response.data
+            const detalhe = typeof body === 'string' && body.length > 0
+              ? extrairDetalheFault(body) : null
+            throw new SefazNetworkError(
+              detalhe
+                ? `Erro no servidor SEFAZ-SP (HTTP 500): ${detalhe}`
+                : 'Erro interno no servidor da SEFAZ-SP (HTTP 500). Tente novamente em instantes.', err)
+          }
+          throw new SefazNetworkError(`Erro HTTP ${status} ao chamar o serviço "${acao}".`, err)
+        }
+        const sslMsg = err.message ?? ''
+        if (code === 'CERT_HAS_EXPIRED' || sslMsg.includes('CERT_HAS_EXPIRED')) {
+          throw new SefazNetworkError('O certificado digital expirou. Renove o e-CNPJ.', err)
+        }
+        if (sslMsg.includes('SSL') || sslMsg.includes('CERT') || sslMsg.includes('certificate')) {
+          throw new SefazNetworkError(
+            'Erro de TLS ao conectar à SEFAZ-SP. Verifique se o certificado está válido.', err)
+        }
+        throw new SefazNetworkError(`Erro de rede ao chamar "${acao}": ${err.message}`, err)
       }
+
+      throw new SefazNetworkError(
+        `Erro inesperado ao chamar "${acao}": ${err instanceof Error ? err.message : String(err)}`, err)
     }
   }
-  throw tratarErroSoap(ultimoErro, acao, envelope)
-}
 
-function tratarErroSoap(err: unknown, acao: string, envelope: string): SefazNetworkError | SefazParseError {
-  if (err instanceof SefazParseError || err instanceof SefazNetworkError) return err
-  const debug = process.env.DEBUG === 'sefaz'
-
-  if (err instanceof AxiosError) {
-    if (debug) {
-      console.error(`[SEFAZ] Erro na requisição:`, {
-        code: err.code,
-        status: err.response?.status,
-        message: err.message,
-        data: err.response?.data,
-      })
-    }
-    if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
-      return new SefazNetworkError(
-        `Timeout ao conectar à SEFAZ-SP (${acao}). Verifique sua conexão e tente novamente.`,
-        err
-      )
-    }
-    if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
-      return new SefazNetworkError(
-        `Não foi possível conectar à SEFAZ-SP (${acao}). Verifique sua conexão com a internet.`,
-        err
-      )
-    }
-    if (err.code === 'ECONNRESET' || err.code === 'EPIPE') {
-      const url = (err as AxiosError).config?.url ?? ''
-      const emProducao = url.includes('nfce.fazenda.sp.gov.br') && !url.includes('homologacao')
-      const dica = emProducao
-        ? ' Em produção: confira se o certificado está autorizado para produção e se o firewall não bloqueia a SEFAZ-SP.'
-        : ''
-      return new SefazNetworkError(
-        `Conexão interrompida pela SEFAZ-SP (${acao}).${dica} Tente novamente.`,
-        err
-      )
-    }
-    if (err.response) {
-      const status = err.response.status
-      if (status === 401 || status === 403) {
-        return new SefazNetworkError(
-          `Acesso negado pelo servidor (HTTP ${status}). Verifique o certificado digital.`,
-          err
-        )
-      }
-      if (status === 500) {
-        const body = err.response?.data
-        console.error('[SEFAZ] HTTP 500 — Envelope enviado:', envelope.substring(0, 500) + (envelope.length > 500 ? '...' : ''))
-        console.error('[SEFAZ] HTTP 500 — Resposta do servidor:', typeof body === 'string' ? body : JSON.stringify(body))
-        const detalhe = typeof body === 'string' && body.length > 0
-          ? extrairDetalheFault(body)
-          : null
-        const msg = detalhe
-          ? `Erro interno no servidor da SEFAZ-SP (HTTP 500): ${detalhe}`
-          : 'Erro interno no servidor da SEFAZ-SP (HTTP 500). Tente novamente em instantes.'
-        return new SefazNetworkError(msg, err)
-      }
-      return new SefazNetworkError(`Erro HTTP ${status} ao chamar o serviço "${acao}".`, err)
-    }
-    const sslMsg = err.message ?? ''
-    if (err.code === 'ERR_SSL_WRONG_VERSION_NUMBER') {
-      return new SefazNetworkError('Endpoint não suporta HTTPS. Verifique a URL do serviço.', err)
-    }
-    if (err.code === 'CERT_HAS_EXPIRED' || sslMsg.includes('CERT_HAS_EXPIRED')) {
-      return new SefazNetworkError('O certificado digital expirou. Renove o e-CNPJ.', err)
-    }
-    if (err.code === 'ERR_SSL_DECRYPTION_FAILED_OR_BAD_RECORD_MAC' || sslMsg.toLowerCase().includes('mac')) {
-      return new SefazNetworkError('Senha do certificado incorreta ou arquivo corrompido.', err)
-    }
-    if (sslMsg.includes('SSL') || sslMsg.includes('CERT') || sslMsg.includes('certificate')) {
-      return new SefazNetworkError(
-        'Erro de TLS ao conectar à SEFAZ-SP. Possíveis causas: certificado expirado, ' +
-        'CNPJ não autorizado para o serviço, ou problema de rede.',
-        err
-      )
-    }
-    return new SefazNetworkError(`Erro de rede ao chamar "${acao}": ${err.message}`, err)
-  }
-  return new SefazNetworkError(
-    `Erro inesperado ao chamar "${acao}": ${err instanceof Error ? err.message : String(err)}`,
-    err
-  )
+  throw new SefazNetworkError(
+    `Falha após ${MAX_TENTATIVAS} tentativas ao chamar "${acao}". Verifique sua conexão.`, ultimoErro)
 }
 
 // ---------------------------------------------------------------------------
-// Parser XML (usado em extrairDetalheFault e extrairRetorno)
+// Parse das respostas
 // ---------------------------------------------------------------------------
 
-const parser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: '@_',
-  removeNSPrefix: true,
-  // Evita converter chNFCe (44 dígitos) em número — JS perde precisão e vira "3.52e+43"
-  parseTagValue: false,
-})
-
-const xmlBuilder = new XMLBuilder({
-  ignoreAttributes: false,
-  attributeNamePrefix: '@_',
-  format: false,
-})
-
 // ---------------------------------------------------------------------------
-// Extração de detalhe de falha SOAP (para HTTP 500)
+// Extração de detalhe de falha SOAP (para erros HTTP 500)
 // ---------------------------------------------------------------------------
 
 function extrairDetalheFault(xmlStr: string): string | null {
   try {
-    const parsed = parser.parse(xmlStr) as Record<string, unknown>
-    const body = (parsed?.Envelope ?? parsed?.['soap:Envelope'] ?? parsed?.['soap12:Envelope']) as Record<string, unknown> | undefined
-    const fault = body?.Fault ?? body?.['soap:Fault'] ?? body?.['soap12:Fault']
+    const p = new XMLParser({ ignoreAttributes: false, removeNSPrefix: true })
+    const parsed = p.parse(xmlStr) as Record<string, unknown>
+    const envelope = (parsed?.Envelope ?? parsed?.['soap:Envelope'] ?? parsed?.['soap12:Envelope']) as Record<string, unknown> | undefined
+    const body = envelope?.Body ?? envelope?.['soap:Body'] ?? envelope?.['soap12:Body']
+    if (!body || typeof body !== 'object') return null
+    const b = body as Record<string, unknown>
+    const fault = b.Fault ?? b['soap:Fault'] ?? b['soap12:Fault']
     if (!fault || typeof fault !== 'object') return null
-
     const f = fault as Record<string, unknown>
-    // SOAP 1.1: faultstring
     const faultstring = f.faultstring ?? f['soap:faultstring']
     if (typeof faultstring === 'string' && faultstring.trim()) return faultstring.trim()
-
-    // SOAP 1.2: Reason/Text
     const reason = f.Reason ?? f['soap12:Reason']
     if (reason && typeof reason === 'object') {
-      const text = (reason as Record<string, unknown>).Text ?? (reason as Record<string, unknown>)['soap12:Text']
+      const text = (reason as Record<string, unknown>).Text
       if (typeof text === 'string' && text.trim()) return text.trim()
     }
-
-    // Fallback: detail ou message
-    const detail = f.detail ?? f.Detail
-    if (detail && typeof detail === 'string') return detail.substring(0, 200)
     return null
   } catch {
     return null
   }
 }
 
-// ---------------------------------------------------------------------------
-// Parse das respostas
-// ---------------------------------------------------------------------------
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  removeNSPrefix: true,
+  parseTagValue: false, // evita chNFCe (44 dígitos) virar notação científica
+})
+
+const xmlBuilder = new XMLBuilder({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  format: false,
+  suppressEmptyNode: true,
+})
 
 function extrairRetorno(xmlStr: string, tagRaiz: string): Record<string, unknown> {
   let parsed: Record<string, unknown>
@@ -425,9 +378,8 @@ function extrairRetorno(xmlStr: string, tagRaiz: string): Record<string, unknown
   }
 
   const p = parsed as Record<string, unknown>
-  // SOAP 1.1: soap:Envelope | SOAP 1.2: soap12:Envelope (removeNSPrefix → Envelope)
-  const envelope = (p['Envelope'] ?? p['soap:Envelope'] ?? p['soap12:Envelope']) as Record<string, unknown> | undefined
-  const body = envelope?.['Body'] ?? envelope?.['soap:Body'] ?? envelope?.['soap12:Body']
+  const envelope = (p['Envelope'] ?? p['soap:Envelope']) as Record<string, unknown> | undefined
+  const body = envelope?.['Body'] ?? envelope?.['soap:Body']
 
   if (!body || typeof body !== 'object') {
     throw new SefazParseError('Resposta SOAP inválida: Body não encontrado.', xmlStr)
@@ -509,17 +461,16 @@ function parseDownload(xmlStr: string): ResultadoDownload {
   if (proc && typeof proc === 'object') {
     const nfeNode = proc.nfeProc as Record<string, unknown> | undefined
     if (nfeNode && typeof nfeNode === 'object') {
-      // Garante xmlns no root (padrão NFe)
-      const nfeNodeComNs = { ...nfeNode }
-      if (!('@_xmlns' in nfeNodeComNs)) (nfeNodeComNs as Record<string, unknown>)['@_xmlns'] = NAMESPACE
-      // Reconstrói XML válido (não JSON) — nfeProc contém NFe + protNFe
-      const nfeProcObj = { nfeProc: nfeNodeComNs }
-      const nfeXmlStr = xmlBuilder.build(nfeProcObj)
       nfeProc = {
         versao: String(nfeNode['@_versao'] ?? ''),
         dhInc:  String(nfeNode.dhInc      ?? ''),
         nProt:  String(nfeNode.nProt      ?? ''),
-        nfeXml: nfeXmlStr,
+        nfeXml: (() => {
+          // Reconstrói XML válido — não JSON — para poder salvar o arquivo .xml
+          const nodeComNs = { ...(nfeNode as Record<string, unknown>) }
+          if (!('@_xmlns' in nodeComNs)) nodeComNs['@_xmlns'] = NAMESPACE
+          return xmlBuilder.build({ nfeProc: nodeComNs }) as string
+        })(),
       }
     }
 
@@ -530,13 +481,11 @@ function parseDownload(xmlStr: string): ResultadoDownload {
 
     for (const ev of eventoArr as Record<string, unknown>[]) {
       if (!ev || typeof ev !== 'object') continue
-      const eventoObj = { procEventoNFe: ev }
-      const eventoXmlStr = xmlBuilder.build(eventoObj)
       eventos.push({
-        versao:     String(ev['@_versao'] ?? ''),
-        dhInc:      String(ev.dhInc      ?? ''),
-        nProt:      String(ev.nProt      ?? ''),
-        eventoXml:  eventoXmlStr,
+        versao:    String(ev['@_versao'] ?? ''),
+        dhInc:     String(ev.dhInc      ?? ''),
+        nProt:     String(ev.nProt      ?? ''),
+        eventoXml: xmlBuilder.build({ procEventoNFe: ev }) as string,
       })
     }
   }
@@ -575,10 +524,14 @@ export async function listarChaves(
   return parseListagem(resposta)
 }
 
-export async function downloadXml(config: ConfigCert, chave: string): Promise<ResultadoDownload> {
+export async function downloadXml(
+  config: ConfigCert,
+  chave: string,
+  agenteExterno?: https.Agent
+): Promise<ResultadoDownload> {
   validarChave(chave)
 
-  const agente   = criarAgente(config.pfxPath, config.senha)
+  const agente   = agenteExterno ?? criarAgente(config.pfxPath, config.senha)
   const tpAmb    = TP_AMB[config.ambiente]
   const url      = ENDPOINTS[config.ambiente].download
   const xml      = xmlDownload(tpAmb, chave)
@@ -616,9 +569,7 @@ export async function listarTodasChaves(
     }
 
     ultimodhEmis = resultado.dhEmisUltNfce
-    // dhEmisUltNfce pode vir como "AAAA-MM-DDThh:mm" ou "AAAA-MM-DDTHH:MM:SS"
-    // NT 2026: dataHoraInicial = 16 caracteres (AAAA-MM-DDThh:mm)
-    di = resultado.dhEmisUltNfce.substring(0, 16)
+    di = resultado.dhEmisUltNfce.substring(0, 16) // AAAA-MM-DDThh:mm
 
     pagina++
     console.log(`[SEFAZ] Página ${pagina}/${MAX_PAGINAS}: ${todasChaves.length} chaves. Próximo ponto: ${di}`)

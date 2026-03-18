@@ -9,6 +9,7 @@ import {
   listarTodasChaves,
   listarChaves,
   downloadXml,
+  criarAgente,
   SefazError,
   SefazNetworkError,
   SefazParseError,
@@ -40,7 +41,6 @@ const store = new Store<StoreSchema>()
 // ---------------------------------------------------------------------------
 
 let mainWindow: BrowserWindow | null = null
-let downloadEmAndamento = false
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -73,24 +73,6 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => { mainWindow = null })
 
-  mainWindow.on('close', (e) => {
-    if (downloadEmAndamento) {
-      e.preventDefault()
-      const resp = dialog.showMessageBoxSync(mainWindow!, {
-        type: 'question',
-        buttons: ['Cancelar', 'Sair mesmo assim'],
-        defaultId: 0,
-        title: 'Download em andamento',
-        message: 'Se você sair agora, o download será interrompido.',
-        detail: 'Tem certeza que deseja fechar?',
-      })
-      if (resp === 1) {
-        downloadEmAndamento = false
-        mainWindow?.destroy()
-      }
-    }
-  })
-
   // Log erros de render não capturados
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     console.error('[Electron] Processo de render encerrado:', details)
@@ -106,30 +88,6 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
-})
-
-app.on('before-quit', (e) => {
-  if (downloadEmAndamento) {
-    e.preventDefault()
-    const win = mainWindow ?? BrowserWindow.getFocusedWindow()
-    if (!win) return
-    const resp = dialog.showMessageBoxSync(win, {
-      type: 'question',
-      buttons: ['Cancelar', 'Sair mesmo assim'],
-      defaultId: 0,
-      title: 'Download em andamento',
-      message: 'Se você sair agora, o download será interrompido.',
-      detail: 'Tem certeza que deseja fechar?',
-    })
-    if (resp === 1) {
-      downloadEmAndamento = false
-      app.quit()
-    }
-  }
-})
-
-ipcMain.on('app:set-busy', (_e, busy: boolean) => {
-  downloadEmAndamento = !!busy
 })
 
 // Captura exceções não tratadas no processo principal
@@ -316,8 +274,19 @@ function extrairCampo(subject: string, campo: string): string {
 }
 
 function extrairCNPJ(texto: string): string {
-  const m = texto.match(/\d{2}[\.\s]?\d{3}[\.\s]?\d{3}[\.\s]?\/?\d{4}[\-\.]?\d{2}/)
-  return m ? m[0].replace(/[.\s/\-]/g, '') : ''
+  // Formato OID em Subject: OID.2.16.76.1.3.3=12345678000195
+  const oidMatch = texto.match(/OID[.\d]+\s*=\s*(\d{14})/i)
+  if (oidMatch) return oidMatch[1]
+
+  // Formato formatado: 12.345.678/0001-95
+  const formMatch = texto.match(/\d{2}[\.\s]?\d{3}[\.\s]?\d{3}[\.\s]?\/?\d{4}[\-\.]?\d{2}/)
+  if (formMatch) return formMatch[0].replace(/[.\s/\-]/g, '')
+
+  // CNPJ puro sem formatação (14 dígitos seguidos)
+  const rawMatch = texto.match(/\d{14}/)
+  if (rawMatch) return rawMatch[0]
+
+  return ''
 }
 
 // ---------------------------------------------------------------------------
@@ -332,26 +301,22 @@ async function exportarCertWindows(thumbprint: string, senha: string): Promise<s
   const tmpPathPs = tmpPath.replace(/\\/g, '\\\\')
 
   // ─── A senha vai por variável de ambiente, nunca embutida no script ───────
-  // Cadeia completa (BuildChain) é crítica para mTLS com SEFAZ — inclui CAs intermediárias ICP-Brasil.
+  // Isso garante que ela não apareça em logs, stack traces ou mensagens de erro.
   const ps = `
     $ErrorActionPreference = 'Stop'
-    $cert = Get-Item "Cert:\\CurrentUser\\My\\${thumbprint}" -ErrorAction Stop
-    $pwd  = ConvertTo-SecureString -String $env:CERT_PASS -Force -AsPlainText
     try {
+      $cert = Get-Item "Cert:\\CurrentUser\\My\\${thumbprint}" -ErrorAction Stop
+      $pwd  = ConvertTo-SecureString -String $env:CERT_PASS -Force -AsPlainText
       Export-PfxCertificate -Cert $cert -FilePath "${tmpPathPs}" -Password $pwd -Force -ChainOption BuildChain | Out-Null
       Write-Output "ok"
     } catch {
+      # Tenta sem BuildChain (compatibilidade com Windows Server/Home)
       try {
-        Export-PfxCertificate -Cert $cert -FilePath "${tmpPathPs}" -Password $pwd -Force -ChainOption BuildChainNoRoot | Out-Null
+        Export-PfxCertificate -Cert $cert -FilePath "${tmpPathPs}" -Password $pwd -Force | Out-Null
         Write-Output "ok"
       } catch {
-        try {
-          Export-PfxCertificate -Cert $cert -FilePath "${tmpPathPs}" -Password $pwd -Force | Out-Null
-          Write-Output "ok"
-        } catch {
-          Write-Output "erro: $($_.Exception.Message)"
-          exit 1
-        }
+        Write-Output "erro: $($_.Exception.Message)"
+        exit 1
       }
     }
   `.trim()
@@ -444,62 +409,29 @@ function limparPfxTemp(pfxPath: string): void {
 }
 
 /**
- * Valida a senha do .pfx (PKCS#12) tentando carregar com https.Agent.
- * O Node.js valida a senha ao construir o agente — senha errada lança exceção.
+ * Valida a senha do .pfx tentando abrir com o módulo crypto nativo do Node.
+ * Lança erro com mensagem clara se a senha estiver errada.
  */
 function validarSenhaPfx(pfxPath: string, senha: string): void {
-  const https = require('https') as typeof import('https')
+  const { createPrivateKey } = require('crypto') as typeof import('crypto')
   const pfxBuffer = fs.readFileSync(pfxPath)
   try {
-    new https.Agent({ pfx: pfxBuffer, passphrase: senha })
-  } catch (err: unknown) {
-    const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
-    if (msg.includes('mac') || msg.includes('password') || msg.includes('decrypt') || msg.includes('bad') || msg.includes('wrong')) {
-      throw new Error('Senha incorreta. Verifique a senha do certificado e tente novamente.')
-    }
-    throw new Error(`Não foi possível validar o certificado: ${err instanceof Error ? err.message : 'erro desconhecido'}`)
-  }
-}
-
-/**
- * Extrai o CNPJ do certificado em arquivo .pfx usando OpenSSL (se disponível).
- * Retorna string vazia se OpenSSL não estiver instalado ou a extração falhar.
- */
-async function extrairCNPJDoPfx(pfxPath: string, senha: string): Promise<string> {
-  try {
-    const passFile = path.join(os.tmpdir(), `nfce_cnpj_pass_${Date.now()}.txt`)
-    fs.writeFileSync(passFile, senha, { mode: 0o600 })
-    try {
-      const pfxEscaped = pfxPath.replace(/\\/g, '/')
-      const passEscaped = passFile.replace(/\\/g, '/')
-      const passArg = passEscaped.includes(' ') ? `file:"${passEscaped}"` : `file:${passEscaped}`
-      const inArg = pfxEscaped.includes(' ') ? `"${pfxEscaped}"` : pfxEscaped
-      const cmd = process.platform === 'win32'
-        ? `openssl pkcs12 -in ${inArg} -clcerts -nokeys -passin ${passArg} 2>nul | openssl x509 -noout -subject`
-        : `openssl pkcs12 -in ${inArg} -clcerts -nokeys -passin ${passArg} 2>/dev/null | openssl x509 -noout -subject`
-      const { stdout } = await execAsync(cmd)
-      return extrairCNPJ(stdout || '')
-    } finally {
-      try { fs.unlinkSync(passFile) } catch { /* ignora */ }
-    }
+    // createPrivateKey com PFX valida a senha imediatamente
+    createPrivateKey({ key: pfxBuffer, format: 'der', type: 'pkcs8', passphrase: senha })
   } catch {
-    return ''
+    // Tenta com pkcs12 via outro método — o Node não tem API direta para pkcs12,
+    // então usamos https.Agent que valida no constructor
+    try {
+      const https = require('https') as typeof import('https')
+      new https.Agent({ pfx: pfxBuffer, passphrase: senha })
+    } catch (err2: unknown) {
+      const msg = err2 instanceof Error ? err2.message.toLowerCase() : ''
+      if (msg.includes('mac') || msg.includes('password') || msg.includes('decrypt') || msg.includes('bad')) {
+        throw new Error('Senha incorreta. Verifique a senha do certificado e tente novamente.')
+      }
+      throw new Error(`Não foi possível validar o certificado: ${err2 instanceof Error ? err2.message : 'erro desconhecido'}`)
+    }
   }
-}
-
-/**
- * Retorna o CNPJ do certificado configurado (matriz) para distinguir de filiais.
- */
-async function obterCNPJDoCertificado(config: { thumbprint?: string; pfxPath?: string; senha?: string; origemStore?: boolean }): Promise<string> {
-  if (config.thumbprint && config.origemStore) {
-    const certs = await listarCertificadosSistema()
-    const cert = certs.find(c => c.thumbprint.toUpperCase() === (config.thumbprint ?? '').toUpperCase())
-    return cert?.cnpj ?? ''
-  }
-  if (config.pfxPath && config.senha) {
-    return extrairCNPJDoPfx(config.pfxPath, config.senha)
-  }
-  return ''
 }
 
 // ---------------------------------------------------------------------------
@@ -510,10 +442,10 @@ async function resolverPfx(
   config: ConfigCert & { thumbprint?: string }
 ): Promise<{ pfxPath: string; tmpCriado: boolean; senha: string }> {
   if (config.thumbprint && process.platform === 'win32') {
-    // Repositório: senha não é necessária — usamos placeholder para o PFX temporário
-    const senha = config.senha || `nfce_temp_${Date.now()}_${Math.random().toString(36).slice(2)}`
-    const pfxPath = await exportarCertWindows(config.thumbprint, senha)
-    return { pfxPath, tmpCriado: true, senha }
+    // No modo store, a senha não vem do usuário — criamos um placeholder
+    const senhaExport = config.senha || `nfce_tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    const pfxPath = await exportarCertWindows(config.thumbprint, senhaExport)
+    return { pfxPath, tmpCriado: true, senha: senhaExport }
   }
 
   if (!config.pfxPath) {
@@ -525,6 +457,50 @@ async function resolverPfx(
   }
 
   return { pfxPath: config.pfxPath, tmpCriado: false, senha: config.senha }
+}
+
+
+// ---------------------------------------------------------------------------
+// Utilitário: extrai CNPJ do certificado para distinguir filiais na UI
+// ---------------------------------------------------------------------------
+
+async function obterCNPJDoCertificado(
+  config: { thumbprint?: string; pfxPath?: string; origemStore?: boolean }
+): Promise<string> {
+  try {
+    if (config.thumbprint && config.origemStore) {
+      const certs = await listarCertificadosSistema()
+      const cert  = certs.find(c =>
+        c.thumbprint.toUpperCase() === (config.thumbprint ?? '').toUpperCase()
+      )
+      return cert?.cnpj ?? ''
+    }
+    if (config.pfxPath) {
+      // Tenta extrair via OpenSSL se disponível
+      try {
+        const passFile = path.join(os.tmpdir(), `nfce_cnpj_${Date.now()}.txt`)
+        const pfxEsc   = config.pfxPath.replace(/\\/g, '/')
+        const passEsc  = passFile.replace(/\\/g, '/')
+        // Usa senha vazia se não disponível (modo store)
+        fs.writeFileSync(passFile, '', { mode: 0o600 })
+        try {
+          const cmd = process.platform === 'win32'
+            ? `openssl pkcs12 -in "${pfxEsc}" -clcerts -nokeys -passin file:"${passEsc}" 2>nul | openssl x509 -noout -subject`
+            : `openssl pkcs12 -in "${pfxEsc}" -clcerts -nokeys -passin file:"${passEsc}" 2>/dev/null | openssl x509 -noout -subject`
+          const { stdout } = await execAsync(cmd, { timeout: 8_000 })
+          return extrairCNPJ(stdout || '')
+        } finally {
+          try { fs.unlinkSync(passFile) } catch { /* ignora */ }
+        }
+      } catch {
+        // OpenSSL não disponível ou falhou — retorna vazio
+        return ''
+      }
+    }
+    return ''
+  } catch {
+    return ''
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -544,14 +520,14 @@ ipcMain.handle('cert:testar-store', async (_e, thumbprint: string, senha: string
   let tmpPath: string | null = null
   try {
     validarThumbprint(thumbprint)
-    // Repositório: senha não é necessária — usamos placeholder
-    const senhaExport = senha || `nfce_temp_${Date.now()}`
+    if (!senha) throw new Error('Informe a senha do certificado.')
 
     if (process.platform === 'win32') {
-      tmpPath = await exportarCertWindows(thumbprint, senhaExport)
-      validarSenhaPfx(tmpPath, senhaExport)
+      tmpPath = await exportarCertWindows(thumbprint, senha)
+      // Valida que o .pfx exportado abre corretamente com a senha fornecida
+      validarSenhaPfx(tmpPath, senha)
     }
-    return { ok: true, mensagem: 'Certificado do repositório validado com sucesso.' }
+    return { ok: true, mensagem: 'Certificado e senha validados com sucesso.' }
   } catch (err: unknown) {
     return { ok: false, mensagem: mensagemErro(err) }
   } finally {
@@ -622,7 +598,7 @@ ipcMain.handle(
   'sefaz:listar-chaves',
   async (
     _e,
-    config: ConfigCert & { thumbprint?: string; origemStore?: boolean },
+    config: ConfigCert & { thumbprint?: string },
     dataInicial: string,
     dataFinal: string | undefined,
     paginacaoAuto: boolean
@@ -638,7 +614,7 @@ ipcMain.handle(
 
       const cfg = { ...config, pfxPath, senha: resolved.senha }
 
-      // CNPJ da matriz (certificado) para distinguir de filiais na interface
+      // CNPJ da matriz (do certificado) — necessário para o filtro de filiais na UI
       const cnpj = await obterCNPJDoCertificado(config)
 
       if (paginacaoAuto) {
@@ -714,46 +690,85 @@ ipcMain.handle(
 
       const cfg = { ...config, pfxPath, senha: resolved.senha }
 
+      // Cria o agente UMA vez e reutiliza em todo o lote.
+      // Evita overhead de TLS handshake a cada download e mantém
+      // o pool de conexões estável durante a operação inteira.
+      const agente = criarAgente(cfg.pfxPath, cfg.senha)
+
+      const MAX_TENTATIVAS          = 3
+      const DELAY_ENTRE_DOWNLOADS   = 300   // ms — evita rate-limit da SEFAZ
+      const DELAY_RETRY_BASE        = 2000  // ms — backoff base no retry
+
       for (let i = 0; i < chaves.length; i++) {
         const chave = chaves[i]
-        try {
-          const resultado = await downloadXml(cfg, chave)
+        let tentativa = 0
+        let baixado   = false
 
-          if (resultado.nfeProc?.nfeXml) {
-            const nome = path.join(pastaSaida, `${resultado.nfeProc.nProt}_nfce.xml`)
-            try {
-              fs.writeFileSync(nome, resultado.nfeProc.nfeXml, 'utf-8')
-            } catch (e) {
-              throw new Error(`Falha ao salvar XML da NFC-e: ${mensagemErro(e)}`)
+        while (tentativa < MAX_TENTATIVAS && !baixado) {
+          try {
+            // Espera exponencial antes de cada retry (não antes do primeiro)
+            if (tentativa > 0) {
+              const espera = DELAY_RETRY_BASE * tentativa
+              console.log(`[Lote] Retry ${tentativa}/${MAX_TENTATIVAS - 1} chave=${chave} aguardando ${espera}ms`)
+              await new Promise(r => setTimeout(r, espera))
             }
-          }
 
-          for (const ev of resultado.eventos) {
-            if (ev.eventoXml) {
-              const nome = path.join(pastaSaida, `${ev.nProt}_evento.xml`)
+            const resultado = await downloadXml(cfg, chave, agente)
+
+            if (resultado.nfeProc?.nfeXml) {
+              const nome = path.join(pastaSaida, `${resultado.nfeProc.nProt}_nfce.xml`)
               try {
-                fs.writeFileSync(nome, ev.eventoXml, 'utf-8')
+                fs.writeFileSync(nome, resultado.nfeProc.nfeXml, 'utf-8')
               } catch (e) {
-                throw new Error(`Falha ao salvar XML de evento: ${mensagemErro(e)}`)
+                throw new Error(`Falha ao salvar XML da NFC-e: ${mensagemErro(e)}`)
               }
             }
-          }
 
-          resultados.push({ chave, ok: true })
-        } catch (err: unknown) {
-          const msg = mensagemErro(err)
-          console.error('[SEFAZ] Download falhou:', chave, '—', msg)
-          resultados.push({ chave, ok: false, erro: msg })
+            for (const ev of resultado.eventos) {
+              if (ev.eventoXml) {
+                const nome = path.join(pastaSaida, `${ev.nProt}_evento.xml`)
+                try {
+                  fs.writeFileSync(nome, ev.eventoXml, 'utf-8')
+                } catch (e) {
+                  throw new Error(`Falha ao salvar XML de evento: ${mensagemErro(e)}`)
+                }
+              }
+            }
+
+            resultados.push({ chave, ok: true })
+            baixado = true
+
+          } catch (err: unknown) {
+            tentativa++
+            const msg = mensagemErro(err)
+            if (tentativa >= MAX_TENTATIVAS) {
+              console.error(`[Lote] Falhou após ${MAX_TENTATIVAS} tentativas: chave=${chave} erro=${msg}`)
+              resultados.push({ chave, ok: false, erro: msg })
+            } else {
+              console.warn(`[Lote] Tentativa ${tentativa} falhou chave=${chave}: ${msg}`)
+            }
+          }
         }
 
         mainWindow?.webContents.send('sefaz:progresso-lote', {
           atual: i + 1,
           total: chaves.length,
           chave,
+          ok: baixado,
         })
+
+        // Pequena pausa entre downloads para não sobrecarregar a SEFAZ
+        if (i < chaves.length - 1) {
+          await new Promise(r => setTimeout(r, DELAY_ENTRE_DOWNLOADS))
+        }
       }
 
+      const falhas = resultados.filter(r => !r.ok)
+      if (falhas.length > 0) {
+        console.warn(`[Lote] Concluído: ${chaves.length - falhas.length} OK, ${falhas.length} falha(s)`)
+      }
       return { ok: true, resultados }
+
     } catch (err: unknown) {
       return { ok: false, xMotivo: mensagemErro(err), resultados }
     } finally {
