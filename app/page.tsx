@@ -594,15 +594,18 @@ function PainelListagem({ config, toast }: { config: Config; toast: (tipo: Toast
         pasta
       )
 
-      // downloadLote agora retorna { ok, resultados, xMotivo? }
-      const resultados = (resultado as { ok?: boolean; resultados?: { ok: boolean }[]; xMotivo?: string }).resultados ?? []
-      const erros = resultados.filter(r => !r.ok).length
+      // downloadLote retorna { ok, resultados: { chave, ok, erro? }[], xMotivo? }
+      const resultados = (resultado as { ok?: boolean; resultados?: { chave: string; ok: boolean; erro?: string }[]; xMotivo?: string }).resultados ?? []
+      const comErro = resultados.filter(r => !r.ok)
+      const erros = comErro.length
 
       if (erros === 0) {
         toast('ok', `${selecionadas.length} XML(s) salvos com sucesso.`)
         try { await window.electron.fs.abrirPasta(pasta) } catch { /* ignora */ }
       } else {
-        toast('info', `${selecionadas.length - erros} OK · ${erros} com erro. Verifique os logs.`)
+        const msgErro = (comErro[0]?.erro ?? 'Erro desconhecido').slice(0, 150)
+        const sufixo = (comErro[0]?.erro?.length ?? 0) > 150 ? '…' : ''
+        toast('erro', `${selecionadas.length - erros} OK · ${erros} com erro: ${msgErro}${sufixo}`)
       }
     } catch (err) {
       toast('erro', `Falha no download em lote: ${err instanceof Error ? err.message : 'Erro'}`)

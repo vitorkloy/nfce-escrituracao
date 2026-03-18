@@ -9,7 +9,7 @@
 import https from 'https'
 import fs from 'fs'
 import axios, { AxiosError } from 'axios'
-import { XMLParser } from 'fast-xml-parser'
+import { XMLParser, XMLBuilder } from 'fast-xml-parser'
 
 // ---------------------------------------------------------------------------
 // Constantes
@@ -334,6 +334,14 @@ const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   removeNSPrefix: true,
+  // Evita converter chNFCe (44 dígitos) em número — JS perde precisão e vira "3.52e+43"
+  parseTagValue: false,
+})
+
+const xmlBuilder = new XMLBuilder({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  format: false,
 })
 
 // ---------------------------------------------------------------------------
@@ -474,11 +482,17 @@ function parseDownload(xmlStr: string): ResultadoDownload {
   if (proc && typeof proc === 'object') {
     const nfeNode = proc.nfeProc as Record<string, unknown> | undefined
     if (nfeNode && typeof nfeNode === 'object') {
+      // Garante xmlns no root (padrão NFe)
+      const nfeNodeComNs = { ...nfeNode }
+      if (!('@_xmlns' in nfeNodeComNs)) (nfeNodeComNs as Record<string, unknown>)['@_xmlns'] = NAMESPACE
+      // Reconstrói XML válido (não JSON) — nfeProc contém NFe + protNFe
+      const nfeProcObj = { nfeProc: nfeNodeComNs }
+      const nfeXmlStr = xmlBuilder.build(nfeProcObj)
       nfeProc = {
         versao: String(nfeNode['@_versao'] ?? ''),
         dhInc:  String(nfeNode.dhInc      ?? ''),
         nProt:  String(nfeNode.nProt      ?? ''),
-        nfeXml: JSON.stringify(nfeNode.NFe ?? {}),
+        nfeXml: nfeXmlStr,
       }
     }
 
@@ -489,11 +503,13 @@ function parseDownload(xmlStr: string): ResultadoDownload {
 
     for (const ev of eventoArr as Record<string, unknown>[]) {
       if (!ev || typeof ev !== 'object') continue
+      const eventoObj = { procEventoNFe: ev }
+      const eventoXmlStr = xmlBuilder.build(eventoObj)
       eventos.push({
         versao:     String(ev['@_versao'] ?? ''),
         dhInc:      String(ev.dhInc      ?? ''),
         nProt:      String(ev.nProt      ?? ''),
-        eventoXml:  JSON.stringify(ev.evento ?? {}),
+        eventoXml:  eventoXmlStr,
       })
     }
   }

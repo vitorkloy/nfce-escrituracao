@@ -652,7 +652,9 @@ ipcMain.handle(
 
           resultados.push({ chave, ok: true })
         } catch (err: unknown) {
-          resultados.push({ chave, ok: false, erro: mensagemErro(err) })
+          const msg = mensagemErro(err)
+          console.error('[SEFAZ] Download falhou:', chave, '—', msg)
+          resultados.push({ chave, ok: false, erro: msg })
         }
 
         mainWindow?.webContents.send('sefaz:progresso-lote', {
