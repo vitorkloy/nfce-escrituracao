@@ -7,11 +7,13 @@
 
 ## ✨ Funcionalidades
 
-- 🔑 **Leitura automática** de certificados instalados no Windows (repositório pessoal)
+- 🔑 **Leitura automática** de certificados instalados no Windows (repositório pessoal) — **sem senha**
+- 📁 **Arquivo .pfx** — modo alternativo com senha obrigatória
 - 🔒 **Autenticação mTLS** — o e-CNPJ nunca sai da máquina do usuário
 - 📋 **Listagem de chaves** (NFCeListagemChaves) com paginação automática para listas > 2.000
 - ⬇️ **Download de XML** completo + eventos (NFCeDownloadXML)
 - 📦 **Download em lote** — selecione N chaves e baixe todos os XMLs de uma vez
+- 📊 **Barra de progresso** durante busca e download — bloqueia interação e avisa ao fechar
 - 🌍 Suporte a **Homologação** e **Produção**
 
 ---
@@ -112,14 +114,14 @@ npm run build
 
 ### Modo A — Repositório do Sistema *(recomendado)*
 
-O app executa PowerShell e lista todos os certificados com chave privada do repositório pessoal do Windows. Basta clicar, digitar a senha e usar.
+O app lista os certificados com chave privada do repositório do Windows. **Senha não necessária** — o certificado é acessado diretamente pelo sistema.
 
 > ⚠️ O certificado precisa ter sido instalado como **exportável**.  
 > Verifique em: `certmgr.msc → Pessoal → Certificados`
 
 ### Modo B — Arquivo `.pfx`
 
-Selecione o arquivo manualmente caso o certificado não esteja instalado no Windows.
+Selecione o arquivo manualmente. **Senha obrigatória** — use o botão Verificar para validar antes de buscar ou baixar.
 
 ---
 
@@ -170,6 +172,7 @@ Selecione o arquivo manualmente caso o certificado não esteja instalado no Wind
 | `npm run build` | Build completo + instalador .exe |
 | `npm run build:next` | Build apenas do Next.js |
 | `npm run build:electron` | Compila apenas os arquivos Electron |
+| `npm run wsdl` | Busca WSDL com certificado (diagnóstico): `npm run wsdl -- "caminho.pfx" "senha" producao` |
 
 ---
 
@@ -177,6 +180,8 @@ Selecione o arquivo manualmente caso o certificado não esteja instalado no Wind
 
 - O arquivo `.pfx` temporário é **criado e apagado na mesma operação** (pasta `%TEMP%`)
 - A **senha nunca é gravada** em nenhum arquivo ou banco de dados
+- **Repositório:** senha não é necessária (certificado acessado pelo Windows)
+- **Arquivo .pfx:** senha obrigatória e validada antes do uso
 - O renderer (Next.js) opera em **sandbox** — sem acesso a Node.js, rede ou disco
 - Toda comunicação com a SEFAZ usa **mTLS** com o certificado do próprio usuário
 

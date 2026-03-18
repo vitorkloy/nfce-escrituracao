@@ -51,7 +51,8 @@ page.tsx                   window.electron.*      ───►  main.ts IPC hand
 ```
 
 **Segurança:**
-- Senha vai por variável de ambiente `$env:CERT_PASS`, nunca no script
+- **Repositório (store):** senha não necessária — certificado acessado pelo Windows; usa senha placeholder na exportação
+- **Arquivo .pfx:** senha obrigatória via `$env:CERT_PASS`, nunca no script
 - .pfx temporário existe apenas durante a chamada e é apagado imediatamente
 - `rejectUnauthorized: false` — ICP-Brasil não está no bundle do Node.js
 - Renderer não tem acesso ao Node.js, só ao que o preload expõe
@@ -119,6 +120,10 @@ Não usar SOAPAction como header separado — no SOAP 1.2 vai dentro do Content-
 ## 7. CONFIGURAÇÃO DO CERTIFICADO
 
 ### Modo Repositório Windows (PowerShell)
+- **Senha não necessária** — certificado desbloqueado pelo Windows
+- Na exportação temporária, usa senha placeholder (não a do usuário)
+- `configOk` para store = apenas `thumbprint`
+
 ```powershell
 # Lista certificados com chave privada
 Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.HasPrivateKey }
@@ -130,6 +135,10 @@ Export-PfxCertificate -Cert $cert -FilePath "C:\tmp\cert.pfx" `
 
 **CRÍTICO:** Usar `-ChainOption BuildChain` para incluir CAs intermediárias da ICP-Brasil.
 Se o Windows não suportar a flag, fallback sem ela.
+
+### Modo Arquivo .pfx
+- **Senha obrigatória** — validada antes de buscar/baixar
+- `configOk` = `pfxPath` + `senha`
 
 ### Agente HTTPS (Node.js)
 ```typescript
@@ -161,13 +170,17 @@ new https.Agent({
 
 7. **Conflito de namespace no XML** → XML interno declarava `xmlns` novamente. Solução: remover xmlns do elemento filho, pois herda do nfeDadosMsg
 
+8. **Repositório vs arquivo** → No modo store, senha não é necessária (certificado desbloqueado pelo Windows). No modo .pfx, senha obrigatória. Campo de senha oculto quando store; `configOk` diferente para cada modo.
+
 ---
 
 ## 9. STATUS ATUAL
 
-O envelope SOAP 1.2 está sendo enviado corretamente (confirmado nos logs).
-Último erro resolvido: VersionMismatch SOAP 1.1 vs 1.2.
-**Próximo passo:** Testar se a listagem retorna resposta com cStat=100/101 após a correção SOAP 1.2.
+- SOAP 1.2 funcionando (NFCeListagemChaves, NFCeDownloadXML)
+- Retry para ECONNRESET, EPIPE, ETIMEDOUT
+- `parseTagValue: false` para chave de 44 dígitos (evita notação científica)
+- XMLBuilder para salvar XML válido (não JSON)
+- UX: overlay de loading com barra de progresso; confirmação ao fechar durante download; botão mostrar/ocultar senha; Verificar senha no modo arquivo; toast com mensagem real da SEFAZ
 
 ---
 
@@ -179,10 +192,13 @@ O envelope SOAP 1.2 está sendo enviado corretamente (confirmado nos logs).
     "dev": "tsc -p tsconfig.electron.json && concurrently -k \"next dev\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on http://localhost:3000 && electron .\"",
     "build": "next build && tsc -p tsconfig.electron.json && electron-builder",
     "build:next": "next build",
-    "build:electron": "tsc -p tsconfig.electron.json"
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "wsdl": "node scripts/buscar-wsdl.js"
   }
 }
 ```
+
+`npm run wsdl -- "caminho.pfx" "senha" producao` — busca WSDL com certificado para diagnóstico.
 
 ---
 
