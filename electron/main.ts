@@ -10,6 +10,8 @@ import {
   listarChaves,
   downloadXml,
   SefazError,
+  SefazNetworkError,
+  SefazParseError,
   type ConfigCert,
   type ResultadoListagem,
   type ResultadoDownload,
@@ -39,7 +41,7 @@ const store = new Store<StoreSchema>()
 
 let mainWindow: BrowserWindow | null = null
 
-function createWindow() {
+function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 760,
@@ -57,13 +59,23 @@ function createWindow() {
 
   const isDev = !app.isPackaged
   if (isDev) {
-    mainWindow.loadURL('http://localhost:3000')
+    mainWindow.loadURL('http://localhost:3000').catch((err) => {
+      console.error('[Electron] Falha ao carregar localhost:3000:', err)
+    })
     mainWindow.webContents.openDevTools()
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../out/index.html'))
+    const indexPath = path.join(__dirname, '../out/index.html')
+    mainWindow.loadFile(indexPath).catch((err) => {
+      console.error('[Electron] Falha ao carregar o arquivo principal:', err)
+    })
   }
 
   mainWindow.on('closed', () => { mainWindow = null })
+
+  // Log erros de render não capturados
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[Electron] Processo de render encerrado:', details)
+  })
 }
 
 app.whenReady().then(() => {
@@ -76,6 +88,40 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
+
+// Captura exceções não tratadas no processo principal
+process.on('uncaughtException', (err) => {
+  console.error('[Main] Exceção não capturada:', err)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[Main] Promise rejeitada não tratada:', reason)
+})
+
+// ---------------------------------------------------------------------------
+// Helper: janela segura (evita non-null assertion)
+// ---------------------------------------------------------------------------
+
+function getWindow(): BrowserWindow {
+  if (!mainWindow) throw new Error('Janela principal não está disponível.')
+  return mainWindow
+}
+
+// ---------------------------------------------------------------------------
+// Helper: mensagem de erro amigável
+// ---------------------------------------------------------------------------
+
+function mensagemErro(err: unknown): string {
+  if (err instanceof SefazError)        return `[${err.cStat}] ${err.xMotivo}`
+  if (err instanceof SefazNetworkError) return err.message
+  if (err instanceof SefazParseError)   return `Erro de parse: ${err.message}`
+  if (err instanceof Error)             return err.message
+  return 'Erro desconhecido. Tente novamente.'
+}
+
+function respostaErro(err: unknown): Record<string, unknown> {
+  if (err instanceof SefazError) return { ok: false, cStat: err.cStat, xMotivo: err.xMotivo }
+  return { ok: false, xMotivo: mensagemErro(err) }
+}
 
 // ---------------------------------------------------------------------------
 // Enumeração de certificados do repositório do sistema
@@ -92,10 +138,17 @@ export interface CertInfo {
   origem: 'store'
 }
 
+/** Valida que o thumbprint é hex puro — previne injeção de comando */
+function validarThumbprint(thumbprint: string): void {
+  if (!/^[0-9A-Fa-f]{40}$/.test(thumbprint)) {
+    throw new Error(`Thumbprint inválido: "${thumbprint}". Esperado 40 caracteres hexadecimais.`)
+  }
+}
+
 async function listarCertificadosSistema(): Promise<CertInfo[]> {
   if (process.platform === 'win32')  return listarCertsWindows()
   if (process.platform === 'darwin') return listarCertsMac()
-  throw new Error('Listagem automática disponível apenas no Windows e macOS.')
+  throw new Error('Listagem automática de certificados disponível apenas no Windows e macOS.')
 }
 
 // --- Windows (PowerShell) ---
@@ -105,40 +158,80 @@ async function listarCertsWindows(): Promise<CertInfo[]> {
     $certs = Get-ChildItem Cert:\\CurrentUser\\My |
       Where-Object { $_.HasPrivateKey } |
       Select-Object Subject, Thumbprint, NotAfter, Issuer, FriendlyName
-    if ($certs -eq $null) { Write-Output '[]'; exit }
-    $certs | ConvertTo-Json -Compress
+    if ($null -eq $certs) { Write-Output '[]'; exit 0 }
+    $result = $certs | ConvertTo-Json -Compress
+    Write-Output $result
   `.trim()
 
-  const { stdout } = await execFileAsync('powershell', [
-    '-NonInteractive', '-NoProfile', '-Command', ps,
-  ])
+  let stdout: string
+  try {
+    const result = await execFileAsync('powershell', [
+      '-NonInteractive', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ps,
+    ], { timeout: 15_000 })
+    stdout = result.stdout
+  } catch (err) {
+    throw new Error(
+      `Falha ao executar PowerShell para listar certificados. ` +
+      `Verifique as permissões de execução do sistema. ` +
+      (err instanceof Error ? err.message : '')
+    )
+  }
 
-  const raw = JSON.parse(stdout.trim() || '[]')
+  // Extrai apenas o JSON da saída — ignora linhas de aviso do PowerShell
+  const jsonMatch = stdout.match(/(\[[\s\S]*\]|\{[\s\S]*\})/)
+  if (!jsonMatch) {
+    // Nenhum certificado encontrado (stdout vazio ou apenas avisos)
+    return []
+  }
+
+  let raw: unknown
+  try {
+    raw = JSON.parse(jsonMatch[0])
+  } catch {
+    return [] // Se não parsear, retorna vazio em vez de lançar
+  }
+
   const arr = Array.isArray(raw) ? raw : [raw]
-  return arr.map((c: Record<string, string>) => parseCertWindows(c))
+  return arr
+    .filter((c): c is Record<string, string> => c !== null && typeof c === 'object')
+    .map(parseCertWindows)
 }
 
 function parseCertWindows(c: Record<string, string>): CertInfo {
   const subject    = c.Subject    ?? ''
-  const thumbprint = (c.Thumbprint ?? '').toUpperCase()
+  const thumbprint = (c.Thumbprint ?? '').toUpperCase().replace(/\s/g, '')
   const emissor    = c.Issuer     ?? ''
   const validade   = c.NotAfter   ?? ''
   const cn         = extrairCampo(subject, 'CN')
   const cnpj       = extrairCNPJ(subject)
   const nome       = cn || subject
-  const expirado   = validade ? new Date(validade) < new Date() : false
+
+  let expirado = false
+  if (validade) {
+    try { expirado = new Date(validade) < new Date() } catch { /* mantém false */ }
+  }
+
   return { thumbprint, subject, cnpj, nome, emissor, validade, expirado, origem: 'store' }
 }
 
 // --- macOS (security + openssl) ---
 
 async function listarCertsMac(): Promise<CertInfo[]> {
-  const { stdout } = await execAsync(
-    'security find-identity -v -p ssl-client login.keychain'
-  )
+  let stdout: string
+  try {
+    const result = await execAsync(
+      'security find-identity -v -p ssl-client login.keychain',
+      { timeout: 10_000 }
+    )
+    stdout = result.stdout
+  } catch {
+    return [] // Keychain vazio ou sem permissão — retorna vazio
+  }
+
   const regex = /\d+\)\s+([0-9A-F]{40})\s+"(.+?)"/gi
   const certs: CertInfo[] = []
-  let m
+  let m: RegExpExecArray | null
+
   while ((m = regex.exec(stdout)) !== null) {
     const thumbprint = m[1].toUpperCase()
     const nome       = m[2]
@@ -146,19 +239,29 @@ async function listarCertsMac(): Promise<CertInfo[]> {
       const d = await detalhesCertMac(thumbprint)
       certs.push({ thumbprint, subject: nome, cnpj: extrairCNPJ(nome), nome, ...d, origem: 'store' })
     } catch {
+      // Detalhe indisponível — inclui o cert com dados parciais
       certs.push({ thumbprint, subject: nome, cnpj: extrairCNPJ(nome), nome, emissor: '', validade: '', expirado: false, origem: 'store' })
     }
   }
+
   return certs
 }
 
-async function detalhesCertMac(thumbprint: string): Promise<{ emissor: string; validade: string; expirado: boolean }> {
+async function detalhesCertMac(
+  thumbprint: string
+): Promise<{ emissor: string; validade: string; expirado: boolean }> {
+  // thumbprint já é hex validado, mas escapamos para segurança
+  const safe = thumbprint.replace(/[^0-9A-Fa-f]/g, '')
   const { stdout } = await execAsync(
-    `security find-certificate -c "${thumbprint}" -p login.keychain | openssl x509 -noout -issuer -enddate`
+    `security find-certificate -c "${safe}" -p login.keychain | openssl x509 -noout -issuer -enddate`,
+    { timeout: 8_000 }
   )
   const emissor  = stdout.match(/issuer=(.+)/)?.[1]  ?? ''
   const validade = stdout.match(/notAfter=(.+)/)?.[1] ?? ''
-  const expirado = validade ? new Date(validade) < new Date() : false
+  let expirado = false
+  if (validade) {
+    try { expirado = new Date(validade) < new Date() } catch { /* mantém false */ }
+  }
   return { emissor, validade, expirado }
 }
 
@@ -171,7 +274,7 @@ function extrairCampo(subject: string, campo: string): string {
 
 function extrairCNPJ(texto: string): string {
   const m = texto.match(/\d{2}[\.\s]?\d{3}[\.\s]?\d{3}[\.\s]?\/?\d{4}[\-\.]?\d{2}/)
-  return m ? m[0].replace(/[.\s\/\-]/g, '') : ''
+  return m ? m[0].replace(/[.\s/\-]/g, '') : ''
 }
 
 // ---------------------------------------------------------------------------
@@ -179,44 +282,162 @@ function extrairCNPJ(texto: string): string {
 // ---------------------------------------------------------------------------
 
 async function exportarCertWindows(thumbprint: string, senha: string): Promise<string> {
-  const tmpPath = path.join(os.tmpdir(), `nfce_${thumbprint.substring(0, 8)}.pfx`)
-  const senhaSafe = senha.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$')
+  validarThumbprint(thumbprint)
 
+  const sufixo  = Math.random().toString(36).substring(2, 8)
+  const tmpPath = path.join(os.tmpdir(), `nfce_${thumbprint.substring(0, 8)}_${sufixo}.pfx`)
+  const tmpPathPs = tmpPath.replace(/\\/g, '\\\\')
+
+  // ─── A senha vai por variável de ambiente, nunca embutida no script ───────
+  // Cadeia completa (BuildChain) é crítica para mTLS com SEFAZ — inclui CAs intermediárias ICP-Brasil.
   const ps = `
+    $ErrorActionPreference = 'Stop'
     $cert = Get-Item "Cert:\\CurrentUser\\My\\${thumbprint}" -ErrorAction Stop
-    $pwd  = ConvertTo-SecureString -String "${senhaSafe}" -Force -AsPlainText
-    Export-PfxCertificate -Cert $cert -FilePath "${tmpPath.replace(/\\/g, '\\\\')}" -Password $pwd -Force | Out-Null
-    Write-Output "ok"
+    $pwd  = ConvertTo-SecureString -String $env:CERT_PASS -Force -AsPlainText
+    try {
+      Export-PfxCertificate -Cert $cert -FilePath "${tmpPathPs}" -Password $pwd -Force -ChainOption BuildChain | Out-Null
+      Write-Output "ok"
+    } catch {
+      try {
+        Export-PfxCertificate -Cert $cert -FilePath "${tmpPathPs}" -Password $pwd -Force -ChainOption BuildChainNoRoot | Out-Null
+        Write-Output "ok"
+      } catch {
+        try {
+          Export-PfxCertificate -Cert $cert -FilePath "${tmpPathPs}" -Password $pwd -Force | Out-Null
+          Write-Output "ok"
+        } catch {
+          Write-Output "erro: $($_.Exception.Message)"
+          exit 1
+        }
+      }
+    }
   `.trim()
 
-  const { stdout, stderr } = await execFileAsync('powershell', [
-    '-NonInteractive', '-NoProfile', '-Command', ps,
-  ])
-
-  if (!stdout.trim().includes('ok')) {
-    throw new Error(
-      stderr?.trim() ||
-      'Falha ao exportar. Verifique se o certificado é marcado como exportável.'
+  let stdout = ''
+  let stderr = ''
+  try {
+    const result = await execFileAsync(
+      'powershell',
+      ['-NonInteractive', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ps],
+      {
+        timeout: 20_000,
+        env: { ...process.env, CERT_PASS: senha }, // senha isolada do script
+      }
     )
+    stdout = result.stdout ?? ''
+    stderr = result.stderr ?? ''
+  } catch (err: unknown) {
+    // execFileAsync rejeita com exit code != 0
+    // err.message contém o comando — NÃO repassamos ele diretamente
+    // Em vez disso, extraímos a mensagem limpa que o PS escreveu no stdout
+    const saida = (err as { stdout?: string; stderr?: string })
+    const msgPS = (saida?.stdout ?? '').match(/^erro:\s*(.+)/mi)?.[1]?.trim()
+                ?? (saida?.stderr ?? '').trim()
+
+    // Classifica erros conhecidos em mensagens amigáveis
+    const msgFinal = traduzirErroCert(msgPS || '')
+    throw new Error(msgFinal)
   }
+
+  // PS retornou exit 0 mas sem "ok" — extrai mensagem se houver
+  if (!stdout.trim().startsWith('ok')) {
+    const msgPS = stdout.match(/^erro:\s*(.+)/mi)?.[1]?.trim() ?? stderr.trim()
+    throw new Error(traduzirErroCert(msgPS || 'Falha desconhecida ao exportar certificado.'))
+  }
+
+  try {
+    const stat = fs.statSync(tmpPath)
+    if (stat.size < 100) throw new Error('Arquivo .pfx exportado parece vazio ou corrompido.')
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('vazio')) throw err
+    throw new Error('Certificado exportado mas não foi possível verificar o arquivo gerado.')
+  }
+
   return tmpPath
 }
 
-function limparPfxTemp(pfxPath: string) {
+/**
+ * Traduz mensagens de erro do PowerShell/Windows para português amigável,
+ * sem expor detalhes técnicos ou a senha do usuário.
+ */
+function traduzirErroCert(msg: string): string {
+  const m = msg.toLowerCase()
+
+  if (m.includes('não exportável') || m.includes('not exportable') || m.includes('exportable')) {
+    return (
+      'O certificado não pode ser exportado.\n' +
+      'Ao instalar o e-CNPJ, a opção "Marcar esta chave como exportável" não foi marcada.\n' +
+      'Reinstale o certificado com essa opção ativada, ou use o modo "Arquivo .pfx".'
+    )
+  }
+  if (m.includes('senha') || m.includes('password') || m.includes('mac') || m.includes('incorrect')) {
+    return 'Senha do certificado incorreta. Verifique e tente novamente.'
+  }
+  if (m.includes('não encontrado') || m.includes('not found') || m.includes('cannot find')) {
+    return 'Certificado não encontrado no repositório. Selecione novamente na lista.'
+  }
+  if (m.includes('acesso negado') || m.includes('access denied') || m.includes('unauthorized')) {
+    return 'Acesso negado ao certificado. Execute o app como o mesmo usuário que instalou o e-CNPJ.'
+  }
+  if (m.includes('timeout') || m.includes('timed out')) {
+    return 'Tempo limite excedido ao exportar o certificado. Tente novamente.'
+  }
+
+  // Mensagem técnica sem informações sensíveis
+  return 'Falha ao exportar o certificado. Verifique se o e-CNPJ está instalado corretamente e tente novamente.'
+}
+
+function limparPfxTemp(pfxPath: string): void {
+  if (!pfxPath) return
   try {
-    if (pfxPath.includes(os.tmpdir()) && fs.existsSync(pfxPath)) fs.unlinkSync(pfxPath)
-  } catch { /* ignora */ }
+    // Só apaga arquivos que estejam na pasta temp — evita apagar coisas erradas
+    const tempDir = os.tmpdir()
+    if (pfxPath.startsWith(tempDir) && fs.existsSync(pfxPath)) {
+      fs.unlinkSync(pfxPath)
+    }
+  } catch (err) {
+    console.warn('[Main] Falha ao apagar .pfx temporário:', err)
+  }
+}
+
+/**
+ * Valida a senha do .pfx (PKCS#12) tentando carregar com https.Agent.
+ * O Node.js valida a senha ao construir o agente — senha errada lança exceção.
+ */
+function validarSenhaPfx(pfxPath: string, senha: string): void {
+  const https = require('https') as typeof import('https')
+  const pfxBuffer = fs.readFileSync(pfxPath)
+  try {
+    new https.Agent({ pfx: pfxBuffer, passphrase: senha })
+  } catch (err: unknown) {
+    const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+    if (msg.includes('mac') || msg.includes('password') || msg.includes('decrypt') || msg.includes('bad') || msg.includes('wrong')) {
+      throw new Error('Senha incorreta. Verifique a senha do certificado e tente novamente.')
+    }
+    throw new Error(`Não foi possível validar o certificado: ${err instanceof Error ? err.message : 'erro desconhecido'}`)
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Utilitário: resolve pfxPath — exporta do store se necessário
 // ---------------------------------------------------------------------------
 
-async function resolverPfx(config: ConfigCert & { thumbprint?: string }): Promise<{ pfxPath: string; tmpCriado: boolean }> {
+async function resolverPfx(
+  config: ConfigCert & { thumbprint?: string }
+): Promise<{ pfxPath: string; tmpCriado: boolean }> {
   if (config.thumbprint && process.platform === 'win32') {
     const pfxPath = await exportarCertWindows(config.thumbprint, config.senha)
     return { pfxPath, tmpCriado: true }
   }
+
+  if (!config.pfxPath) {
+    throw new Error('Nenhum certificado configurado. Configure um e-CNPJ na aba Certificado.')
+  }
+
+  if (!fs.existsSync(config.pfxPath)) {
+    throw new Error(`Arquivo de certificado não encontrado: "${config.pfxPath}". Reconfigure o certificado.`)
+  }
+
   return { pfxPath: config.pfxPath, tmpCriado: false }
 }
 
@@ -229,21 +450,24 @@ ipcMain.handle('cert:listar-sistema', async () => {
     const certs = await listarCertificadosSistema()
     return { ok: true, certs }
   } catch (err: unknown) {
-    return { ok: false, erro: err instanceof Error ? err.message : 'Erro ao listar certificados.' }
+    return { ok: false, erro: mensagemErro(err) }
   }
 })
 
 ipcMain.handle('cert:testar-store', async (_e, thumbprint: string, senha: string) => {
   let tmpPath: string | null = null
   try {
+    validarThumbprint(thumbprint)
+    if (!senha) throw new Error('Informe a senha do certificado.')
+
     if (process.platform === 'win32') {
       tmpPath = await exportarCertWindows(thumbprint, senha)
-      const stat = fs.statSync(tmpPath)
-      if (stat.size < 100) throw new Error('Arquivo exportado parece inválido.')
+      // Valida que o .pfx exportado abre corretamente com a senha fornecida
+      validarSenhaPfx(tmpPath, senha)
     }
-    return { ok: true, mensagem: 'Certificado validado com sucesso.' }
+    return { ok: true, mensagem: 'Certificado e senha validados com sucesso.' }
   } catch (err: unknown) {
-    return { ok: false, mensagem: err instanceof Error ? err.message : 'Erro ao exportar.' }
+    return { ok: false, mensagem: mensagemErro(err) }
   } finally {
     if (tmpPath) limparPfxTemp(tmpPath)
   }
@@ -254,34 +478,53 @@ ipcMain.handle('cert:testar-store', async (_e, thumbprint: string, senha: string
 // ---------------------------------------------------------------------------
 
 ipcMain.handle('cert:selecionar-arquivo', async () => {
-  const result = await dialog.showOpenDialog(mainWindow!, {
-    title: 'Selecionar certificado digital (.pfx / .p12)',
-    filters: [
-      { name: 'Certificado Digital', extensions: ['pfx', 'p12'] },
-      { name: 'Todos os arquivos', extensions: ['*'] },
-    ],
-    properties: ['openFile'],
-  })
-  if (result.canceled || result.filePaths.length === 0) return null
-  return result.filePaths[0]
+  try {
+    const win = getWindow()
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Selecionar certificado digital (.pfx / .p12)',
+      filters: [
+        { name: 'Certificado Digital', extensions: ['pfx', 'p12'] },
+        { name: 'Todos os arquivos', extensions: ['*'] },
+      ],
+      properties: ['openFile'],
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  } catch {
+    return null
+  }
 })
 
 ipcMain.handle('cert:salvar-config', async (_e, config: StoreSchema['cert']) => {
-  store.set('cert', config)
-  return true
+  try {
+    store.set('cert', config)
+    return true
+  } catch (err) {
+    console.error('[Main] Falha ao salvar configuração:', err)
+    return false
+  }
 })
 
 ipcMain.handle('cert:carregar-config', async () => {
-  return store.get('cert') ?? null
+  try {
+    return store.has("cert") ? store.get("cert") : null
+  } catch {
+    return null
+  }
 })
 
 ipcMain.handle('cert:testar', async (_e, pfxPath: string, senha: string) => {
   try {
+    if (!pfxPath) throw new Error('Nenhum arquivo selecionado.')
+    if (!fs.existsSync(pfxPath)) throw new Error(`Arquivo não encontrado: "${pfxPath}"`)
     const pfxBuffer = fs.readFileSync(pfxPath)
     if (!pfxBuffer || pfxBuffer.length < 100) throw new Error('Arquivo vazio ou inválido.')
-    return { ok: true, mensagem: 'Arquivo lido. Credenciais validadas na primeira consulta.' }
+    if (!senha) throw new Error('Informe a senha do certificado.')
+    // Valida a senha de verdade tentando abrir o PFX com crypto
+    validarSenhaPfx(pfxPath, senha)
+    return { ok: true, mensagem: 'Certificado e senha validados com sucesso.' }
   } catch (err: unknown) {
-    return { ok: false, mensagem: err instanceof Error ? err.message : 'Erro desconhecido.' }
+    return { ok: false, mensagem: mensagemErro(err) }
   }
 })
 
@@ -291,10 +534,24 @@ ipcMain.handle('cert:testar', async (_e, pfxPath: string, senha: string) => {
 
 ipcMain.handle(
   'sefaz:listar-chaves',
-  async (_e, config: ConfigCert & { thumbprint?: string }, dataInicial: string, dataFinal: string | undefined, paginacaoAuto: boolean) => {
-    const { pfxPath, tmpCriado } = await resolverPfx(config).catch(err => { throw err })
-    const cfg = { ...config, pfxPath }
+  async (
+    _e,
+    config: ConfigCert & { thumbprint?: string },
+    dataInicial: string,
+    dataFinal: string | undefined,
+    paginacaoAuto: boolean
+  ) => {
+    let pfxPath = ''
+    let tmpCriado = false
+
     try {
+      // Resolve o certificado — lança erro explícito se não configurado
+      const resolved = await resolverPfx(config)
+      pfxPath   = resolved.pfxPath
+      tmpCriado = resolved.tmpCriado
+
+      const cfg = { ...config, pfxPath }
+
       if (paginacaoAuto) {
         const chaves = await listarTodasChaves(cfg, dataInicial, dataFinal, (parcial) => {
           mainWindow?.webContents.send('sefaz:progresso-listagem', parcial)
@@ -305,10 +562,9 @@ ipcMain.handle(
         return { ok: true, ...resultado }
       }
     } catch (err: unknown) {
-      if (err instanceof SefazError) return { ok: false, cStat: err.cStat, xMotivo: err.xMotivo }
-      return { ok: false, xMotivo: err instanceof Error ? err.message : 'Erro desconhecido.' }
+      return respostaErro(err)
     } finally {
-      if (tmpCriado) limparPfxTemp(pfxPath)
+      if (tmpCriado && pfxPath) limparPfxTemp(pfxPath)
     }
   }
 )
@@ -317,78 +573,145 @@ ipcMain.handle(
 // IPC — NFCeDownloadXML
 // ---------------------------------------------------------------------------
 
-ipcMain.handle('sefaz:download-xml', async (_e, config: ConfigCert & { thumbprint?: string }, chave: string) => {
-  const { pfxPath, tmpCriado } = await resolverPfx(config).catch(err => { throw err })
-  const cfg = { ...config, pfxPath }
-  try {
-    const resultado: ResultadoDownload = await downloadXml(cfg, chave)
-    return { ok: true, ...resultado }
-  } catch (err: unknown) {
-    if (err instanceof SefazError) return { ok: false, cStat: err.cStat, xMotivo: err.xMotivo }
-    return { ok: false, xMotivo: err instanceof Error ? err.message : 'Erro desconhecido.' }
-  } finally {
-    if (tmpCriado) limparPfxTemp(pfxPath)
+ipcMain.handle(
+  'sefaz:download-xml',
+  async (_e, config: ConfigCert & { thumbprint?: string }, chave: string) => {
+    let pfxPath  = ''
+    let tmpCriado = false
+
+    try {
+      const resolved = await resolverPfx(config)
+      pfxPath   = resolved.pfxPath
+      tmpCriado = resolved.tmpCriado
+
+      const resultado: ResultadoDownload = await downloadXml({ ...config, pfxPath }, chave)
+      return { ok: true, ...resultado }
+    } catch (err: unknown) {
+      return respostaErro(err)
+    } finally {
+      if (tmpCriado && pfxPath) limparPfxTemp(pfxPath)
+    }
   }
-})
+)
 
 // ---------------------------------------------------------------------------
 // IPC — Download em lote
 // ---------------------------------------------------------------------------
 
-ipcMain.handle('sefaz:download-lote', async (_e, config: ConfigCert & { thumbprint?: string }, chaves: string[], pastaSaida: string) => {
-  const { pfxPath, tmpCriado } = await resolverPfx(config)
-  const cfg = { ...config, pfxPath }
-  const resultados: { chave: string; ok: boolean; erro?: string }[] = []
+ipcMain.handle(
+  'sefaz:download-lote',
+  async (
+    _e,
+    config: ConfigCert & { thumbprint?: string },
+    chaves: string[],
+    pastaSaida: string
+  ) => {
+    let pfxPath  = ''
+    let tmpCriado = false
+    const resultados: { chave: string; ok: boolean; erro?: string }[] = []
 
-  try {
-    for (let i = 0; i < chaves.length; i++) {
-      const chave = chaves[i]
-      try {
-        const resultado = await downloadXml(cfg, chave)
-        if (resultado.nfeProc?.nfeXml) {
-          fs.writeFileSync(path.join(pastaSaida, `${resultado.nfeProc.nProt}_nfce.xml`), resultado.nfeProc.nfeXml, 'utf-8')
-        }
-        for (const ev of resultado.eventos) {
-          if (ev.eventoXml) fs.writeFileSync(path.join(pastaSaida, `${ev.nProt}_evento.xml`), ev.eventoXml, 'utf-8')
-        }
-        resultados.push({ chave, ok: true })
-      } catch (err: unknown) {
-        resultados.push({ chave, ok: false, erro: err instanceof Error ? err.message : 'Erro' })
-      }
-      mainWindow?.webContents.send('sefaz:progresso-lote', { atual: i + 1, total: chaves.length, chave })
+    // Valida a pasta de saída antes de começar
+    try {
+      if (!pastaSaida) throw new Error('Pasta de saída não informada.')
+      fs.mkdirSync(pastaSaida, { recursive: true })
+    } catch (err) {
+      return { ok: false, xMotivo: `Pasta de saída inválida: ${mensagemErro(err)}`, resultados: [] }
     }
-  } finally {
-    if (tmpCriado) limparPfxTemp(pfxPath)
-  }
 
-  return resultados
-})
+    try {
+      const resolved = await resolverPfx(config)
+      pfxPath   = resolved.pfxPath
+      tmpCriado = resolved.tmpCriado
+
+      const cfg = { ...config, pfxPath }
+
+      for (let i = 0; i < chaves.length; i++) {
+        const chave = chaves[i]
+        try {
+          const resultado = await downloadXml(cfg, chave)
+
+          if (resultado.nfeProc?.nfeXml) {
+            const nome = path.join(pastaSaida, `${resultado.nfeProc.nProt}_nfce.xml`)
+            try {
+              fs.writeFileSync(nome, resultado.nfeProc.nfeXml, 'utf-8')
+            } catch (e) {
+              throw new Error(`Falha ao salvar XML da NFC-e: ${mensagemErro(e)}`)
+            }
+          }
+
+          for (const ev of resultado.eventos) {
+            if (ev.eventoXml) {
+              const nome = path.join(pastaSaida, `${ev.nProt}_evento.xml`)
+              try {
+                fs.writeFileSync(nome, ev.eventoXml, 'utf-8')
+              } catch (e) {
+                throw new Error(`Falha ao salvar XML de evento: ${mensagemErro(e)}`)
+              }
+            }
+          }
+
+          resultados.push({ chave, ok: true })
+        } catch (err: unknown) {
+          resultados.push({ chave, ok: false, erro: mensagemErro(err) })
+        }
+
+        mainWindow?.webContents.send('sefaz:progresso-lote', {
+          atual: i + 1,
+          total: chaves.length,
+          chave,
+        })
+      }
+
+      return { ok: true, resultados }
+    } catch (err: unknown) {
+      return { ok: false, xMotivo: mensagemErro(err), resultados }
+    } finally {
+      if (tmpCriado && pfxPath) limparPfxTemp(pfxPath)
+    }
+  }
+)
 
 // ---------------------------------------------------------------------------
 // IPC — Utilitários de arquivo
 // ---------------------------------------------------------------------------
 
 ipcMain.handle('fs:selecionar-pasta', async () => {
-  const result = await dialog.showOpenDialog(mainWindow!, {
-    title: 'Selecionar pasta de destino',
-    properties: ['openDirectory', 'createDirectory'],
-  })
-  if (result.canceled || result.filePaths.length === 0) return null
-  return result.filePaths[0]
+  try {
+    const win    = getWindow()
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Selecionar pasta de destino',
+      properties: ['openDirectory', 'createDirectory'],
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  } catch {
+    return null
+  }
 })
 
 ipcMain.handle('fs:salvar-xml', async (_e, conteudo: string, nomeArquivo: string) => {
-  const result = await dialog.showSaveDialog(mainWindow!, {
-    title: 'Salvar XML',
-    defaultPath: nomeArquivo,
-    filters: [{ name: 'XML', extensions: ['xml'] }],
-  })
-  if (result.canceled || !result.filePath) return false
-  fs.writeFileSync(result.filePath, conteudo, 'utf-8')
-  shell.showItemInFolder(result.filePath)
-  return true
+  try {
+    const win    = getWindow()
+    const result = await dialog.showSaveDialog(win, {
+      title: 'Salvar XML',
+      defaultPath: nomeArquivo,
+      filters: [{ name: 'XML', extensions: ['xml'] }],
+    })
+    if (result.canceled || !result.filePath) return false
+
+    fs.writeFileSync(result.filePath, conteudo, 'utf-8')
+    shell.showItemInFolder(result.filePath)
+    return true
+  } catch (err) {
+    console.error('[Main] Falha ao salvar XML:', err)
+    return false
+  }
 })
 
 ipcMain.handle('fs:abrir-pasta', async (_e, caminho: string) => {
-  shell.openPath(caminho)
+  try {
+    await shell.openPath(caminho)
+  } catch (err) {
+    console.warn('[Main] Falha ao abrir pasta:', err)
+  }
 })

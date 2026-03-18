@@ -4,11 +4,12 @@
   "description": "Serviços de Apoio à Escrituração da NFC-e — SEFAZ-SP",
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "node node_modules/typescript/bin/tsc -p tsconfig.electron.json && concurrently -k \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "dev": "tsc -p tsconfig.electron.json && concurrently -k \"next dev\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on http://localhost:3000 && electron .\"",
     "build": "next build && tsc -p tsconfig.electron.json && electron-builder",
     "build:next": "next build",
     "build:electron": "tsc -p tsconfig.electron.json",
-    "dist": "npm run build"
+    "dist": "npm run build",
+    "wsdl": "node scripts/buscar-wsdl.js"
   },
   "dependencies": {
     "axios": "^1.7.2",
