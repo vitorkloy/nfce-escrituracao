@@ -520,14 +520,16 @@ ipcMain.handle('cert:testar-store', async (_e, thumbprint: string, senha: string
   let tmpPath: string | null = null
   try {
     validarThumbprint(thumbprint)
-    if (!senha) throw new Error('Informe a senha do certificado.')
+    // No modo repositório, a senha não é necessária — o certificado é acessado pelo Windows.
+    // Usamos senha placeholder para exportar o .pfx temporário (exigência do formato).
+    const senhaExport = senha || `nfce_tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`
 
     if (process.platform === 'win32') {
-      tmpPath = await exportarCertWindows(thumbprint, senha)
-      // Valida que o .pfx exportado abre corretamente com a senha fornecida
-      validarSenhaPfx(tmpPath, senha)
+      tmpPath = await exportarCertWindows(thumbprint, senhaExport)
+      // Valida que o .pfx exportado abre corretamente
+      validarSenhaPfx(tmpPath, senhaExport)
     }
-    return { ok: true, mensagem: 'Certificado e senha validados com sucesso.' }
+    return { ok: true, mensagem: 'Certificado validado com sucesso.' }
   } catch (err: unknown) {
     return { ok: false, mensagem: mensagemErro(err) }
   } finally {

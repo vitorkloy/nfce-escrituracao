@@ -173,8 +173,8 @@ function validarChave(chave: string): void {
 // ---------------------------------------------------------------------------
 
 function xmlListagem(tpAmb: string, dataInicial: string, dataFinal?: string): string {
-  // Namespace declarado no nfeDadosMsg pai — não repetir aqui para evitar conflito
-  let body = `<nfceListagemChaves versao="${VERSAO}">`
+  // XSD SAE-NFC-e: elemento raiz no namespace NFe (portalfiscal.inf.br/nfe)
+  let body = `<nfceListagemChaves xmlns="${NAMESPACE}" versao="${VERSAO}">`
   body += `<tpAmb>${tpAmb}</tpAmb>`
   body += `<dataHoraInicial>${dataInicial}</dataHoraInicial>`
   if (dataFinal) body += `<dataHoraFinal>${dataFinal}</dataHoraFinal>`
@@ -184,7 +184,7 @@ function xmlListagem(tpAmb: string, dataInicial: string, dataFinal?: string): st
 
 function xmlDownload(tpAmb: string, chave: string): string {
   return (
-    `<nfceDownloadXML versao="${VERSAO}">` +
+    `<nfceDownloadXML xmlns="${NAMESPACE}" versao="${VERSAO}">` +
     `<tpAmb>${tpAmb}</tpAmb>` +
     `<chNFCe>${chave}</chNFCe>` +
     `</nfceDownloadXML>`
@@ -196,11 +196,9 @@ function xmlDownload(tpAmb: string, chave: string): string {
 // ---------------------------------------------------------------------------
 
 function soapEnvelope(acao: string, xmlCorpo: string): string {
-  // SEFAZ-SP usa SOAP 1.2 — namespace diferente do SOAP 1.1
+  // Estrutura EXATA conforme WSDL SEFAZ-SP (ordem de xmlns idêntica)
   return `<?xml version="1.0" encoding="utf-8"?>
-<soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"
-                 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                 xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
   <soap12:Body>
     <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/${acao}">${xmlCorpo}</nfeDadosMsg>
   </soap12:Body>
@@ -234,7 +232,8 @@ async function postSoap(
     try {
       const resp = await axios.post(url, envelope, {
         headers: {
-          'Content-Type': `application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/${acao}/nfeDadosMsg"`,
+          // WSDL SEFAZ-SP: Content-Type sem action (conforme amostra oficial)
+          'Content-Type': 'application/soap+xml; charset=utf-8',
         },
         httpsAgent: agente,
         timeout: 60_000,
@@ -520,7 +519,7 @@ export async function listarChaves(
   const tpAmb   = TP_AMB[config.ambiente]
   const url     = ENDPOINTS[config.ambiente].listagem
   const xml     = xmlListagem(tpAmb, dataInicial, dataFinal)
-  const resposta = await postSoap(url, 'nfceListagemChaves', xml, agente)
+  const resposta = await postSoap(url, 'NFCeListagemChaves', xml, agente)
   return parseListagem(resposta)
 }
 
@@ -535,7 +534,7 @@ export async function downloadXml(
   const tpAmb    = TP_AMB[config.ambiente]
   const url      = ENDPOINTS[config.ambiente].download
   const xml      = xmlDownload(tpAmb, chave)
-  const resposta = await postSoap(url, 'nfceDownloadXML', xml, agente)
+  const resposta = await postSoap(url, 'NFCeDownloadXML', xml, agente)
   return parseDownload(resposta)
 }
 
