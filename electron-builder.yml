@@ -11,6 +11,13 @@ files:
   - out/**
   - package.json
 
+# Ícones em runtime (BrowserWindow / barra de tarefas). Sem isso, só o .exe embute ícone via win.icon.
+extraResources:
+  - from: public/icon.ico
+    to: icon.ico
+  - from: public/icon.png
+    to: icon.png
+
 win:
   target:
     - target: nsis
@@ -23,6 +30,9 @@ nsis:
   allowToChangeInstallationDirectory: true
   installerLanguages: [pt_BR]
   language: 1046
+  # Garante que setup/uninstall use o mesmo .ico do app (evita ícone antigo em cache de tema NSIS)
+  installerIcon: public/icon.ico
+  uninstallerIcon: public/icon.ico
 
 # .icns exige iconutil (macOS). Em build no Windows use ícone padrão do Electron para Mac
 # ou gere .icns no Mac e coloque em public/icon.icns

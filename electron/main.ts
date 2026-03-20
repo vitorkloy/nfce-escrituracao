@@ -42,7 +42,33 @@ const store = new Store<StoreSchema>()
 
 let mainWindow: BrowserWindow | null = null
 
+/** Ícone da janela / taskbar: empacotado usa extraResources; em dev usa public/. */
+function resolveWindowIcon(): string | undefined {
+  if (process.platform === 'darwin') {
+    return undefined
+  }
+
+  if (app.isPackaged) {
+    const res = process.resourcesPath
+    if (process.platform === 'win32') {
+      const ico = path.join(res, 'icon.ico')
+      return fs.existsSync(ico) ? ico : undefined
+    }
+    const png = path.join(res, 'icon.png')
+    return fs.existsSync(png) ? png : undefined
+  }
+
+  const root = path.join(__dirname, '..')
+  if (process.platform === 'win32') {
+    const ico = path.join(root, 'public', 'icon.ico')
+    return fs.existsSync(ico) ? ico : undefined
+  }
+  const png = path.join(root, 'public', 'icon.png')
+  return fs.existsSync(png) ? png : undefined
+}
+
 function createWindow(): void {
+  const icon = resolveWindowIcon()
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 760,
@@ -50,6 +76,7 @@ function createWindow(): void {
     minHeight: 600,
     backgroundColor: '#0f1117',
     titleBarStyle: 'hiddenInset',
+    ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -89,6 +116,9 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
+
+// Versão do app (package.json) — instalador e electron-builder usam o mesmo campo
+ipcMain.handle('app:get-version', () => app.getVersion())
 
 // Captura exceções não tratadas no processo principal
 process.on('uncaughtException', (err) => {

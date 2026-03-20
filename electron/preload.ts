@@ -63,5 +63,6 @@ contextBridge.exposeInMainWorld('electron', {
 
   app: {
     setBusy: (busy: boolean) => ipcRenderer.send('app:set-busy', busy),
+    getVersion: () => ipcRenderer.invoke('app:get-version') as Promise<string>,
   },
 })

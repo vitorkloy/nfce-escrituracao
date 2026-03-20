@@ -101,9 +101,15 @@ $env:DEBUG="sefaz"; npm run dev
 
 **Em caso de HTTP 500:** O app exibe a mensagem de erro retornada pela SEFAZ (quando disponível em XML). Rode com `DEBUG=sefaz` e verifique no console do Electron o envelope enviado e a resposta completa para diagnóstico.
 
+### Versão do aplicativo
+
+A versão exibida no app e no nome do `.exe` vem só do campo **`version`** em `package.json`. Fluxo completo: [docs/VERSIONAMENTO.md](docs/VERSIONAMENTO.md).
+
 ### Gerar instalador `.exe`
 
-O build gera automaticamente `public/icon.ico` e `public/icon.png` (teal) antes do Next + Electron. Para só regenerar ícones: `npm run icons`.
+**Passo a passo completo:** [docs/GUIA-BUILD-EXE.md](docs/GUIA-BUILD-EXE.md)
+
+**Ícones:** obrigatórios em `public/` — `icon.ico` e `icon.png`, ou arquivos com `nfc` no nome (ex.: `NFC·e.ico` / `NFC·e.png`) que o build copia para esses nomes. Ver `public/README.md`.
 
 ```bash
 npm run build

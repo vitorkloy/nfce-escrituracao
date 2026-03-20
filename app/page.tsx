@@ -1106,6 +1106,7 @@ function PainelDownload({ config, toast }: { config: Config; toast: (tipo: Toast
 
 export default function Home() {
   const [isElectron] = useIsElectron()
+  const [versaoApp, setVersaoApp] = useState<string>('')
   const [aba,    setAba]    = useState<Aba>('config')
   const [config, setConfig] = useState<Config>({
     pfxPath: '', thumbprint: undefined, origemStore: true, senha: '', ambiente: 'homologacao',
@@ -1128,6 +1129,13 @@ export default function Home() {
         }))
       })
       .catch(err => console.warn('[App] Falha ao carregar config:', err))
+  }, [isElectron])
+
+  useEffect(() => {
+    if (!isElectron) return
+    window.electron.app.getVersion()
+      .then(setVersaoApp)
+      .catch(() => setVersaoApp(''))
   }, [isElectron])
 
   const toast = useCallback((tipo: ToastInfo['tipo'], msg: string) => {
@@ -1183,6 +1191,11 @@ export default function Home() {
         </nav>
 
         <div className="px-5 py-4" style={{ borderTop: '1px solid var(--border)' }}>
+          {versaoApp && (
+            <p className="text-xs font-mono mb-1" style={{ color: 'var(--teal)' }} title="Versão do aplicativo">
+              App v{versaoApp}
+            </p>
+          )}
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>SAE-NFC-e v1.0.0</p>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>SEFAZ-SP · NT 2026</p>
         </div>

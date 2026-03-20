@@ -98,6 +98,8 @@ declare global {
       }
       app: {
         setBusy(busy: boolean): void
+        /** Versão semver do package.json (instalador NSIS usa o mesmo número) */
+        getVersion(): Promise<string>
       }
     }
   }
