@@ -24,9 +24,10 @@ nsis:
   installerLanguages: [pt_BR]
   language: 1046
 
+# .icns exige iconutil (macOS). Em build no Windows use ícone padrão do Electron para Mac
+# ou gere .icns no Mac e coloque em public/icon.icns
 mac:
   target: dmg
-  icon: public/icon.icns
 
 linux:
   target: AppImage

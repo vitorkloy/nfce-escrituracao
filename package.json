@@ -2,10 +2,12 @@
   "name": "nfce-escrituracao",
   "version": "1.0.0",
   "description": "Serviços de Apoio à Escrituração da NFC-e — SEFAZ-SP",
+  "author": "Globalpac / Vitor Kloy",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "tsc -p tsconfig.electron.json && concurrently -k \"next dev\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on http://localhost:3000 && electron .\"",
-    "build": "next build && tsc -p tsconfig.electron.json && electron-builder",
+    "icons": "node scripts/generate-app-icons.cjs",
+    "build": "node scripts/generate-app-icons.cjs && next build && tsc -p tsconfig.electron.json && electron-builder",
     "build:next": "next build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "dist": "npm run build",
@@ -30,6 +32,8 @@
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.6",
     "typescript": "^5.5.3",
-    "wait-on": "^7.2.0"
+    "wait-on": "^7.2.0",
+    "png-to-ico": "^2.1.8",
+    "sharp": "^0.33.5"
   }
 }

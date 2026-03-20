@@ -1,0 +1,154 @@
+Ambiente de Homologação​
+
+Listagem de Chaves​
+https://homologacao.nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx
+Serviço destinado à consulta de chaves de NFC-e do serviço prestado pelo Portal da Secretaria da Fazenda Estadual
+
+The following operations are supported. For a formal definition, please review the Service Description.
+
+nfceListagemChaves
+Consulta de Chaves de NFC-e
+
+nfceListagemChaves
+Test
+The test form is only available for requests from the local machine.
+SOAP 1.2
+The following is a sample SOAP 1.2 request and response. The placeholders shown need to be replaced with actual values.
+
+POST /ws/NFCeListagemChaves.asmx HTTP/1.1
+Host: homologacao.nfce.fazenda.sp.gov.br
+Content-Type: application/soap+xml; charset=utf-8
+Content-Length: length
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFCeListagemChaves">xml</nfeDadosMsg>
+  </soap12:Body>
+</soap12:Envelope>
+HTTP/1.1 200 OK
+Content-Type: application/soap+xml; charset=utf-8
+Content-Length: length
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeResultMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFCeListagemChaves">xml</nfeResultMsg>
+  </soap12:Body>
+</soap12:Envelope>
+
+-//--
+
+Download de XML​
+https://homologacao.nfce.fazenda.sp.gov.br/ws/NFCeDownloadXML.asmx
+
+Serviço destinado ao download do XML de NFC-e do serviço prestado pelo Portal da Secretaria da Fazenda Estadual
+
+The following operations are supported. For a formal definition, please review the Service Description.
+
+nfceDownloadXML
+Download do XML da NFC-e
+nfceDownloadXML
+Test
+The test form is only available for requests from the local machine.
+SOAP 1.2
+The following is a sample SOAP 1.2 request and response. The placeholders shown need to be replaced with actual values.
+
+POST /ws/NFCeDownloadXML.asmx HTTP/1.1
+Host: homologacao.nfce.fazenda.sp.gov.br
+Content-Type: application/soap+xml; charset=utf-8
+Content-Length: length
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFCeDownloadXML">xml</nfeDadosMsg>
+  </soap12:Body>
+</soap12:Envelope>
+HTTP/1.1 200 OK
+Content-Type: application/soap+xml; charset=utf-8
+Content-Length: length
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeResultMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFCeDownloadXML">xml</nfeResultMsg>
+  </soap12:Body>
+</soap12:Envelope>
+
+----------------------------------------------------
+
+Ambiente de Produção
+
+Listagem de Chaves​
+https://nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx
+Serviço destinado à consulta de chaves de NFC-e do serviço prestado pelo Portal da Secretaria da Fazenda Estadual
+
+The following operations are supported. For a formal definition, please review the Service Description.
+
+nfceListagemChaves
+Consulta de Chaves de NFC-e
+nfceListagemChaves
+Test
+The test form is only available for requests from the local machine.
+SOAP 1.2
+The following is a sample SOAP 1.2 request and response. The placeholders shown need to be replaced with actual values.
+
+POST /ws/NFCeListagemChaves.asmx HTTP/1.1
+Host: nfce.fazenda.sp.gov.br
+Content-Type: application/soap+xml; charset=utf-8
+Content-Length: length
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFCeListagemChaves">xml</nfeDadosMsg>
+  </soap12:Body>
+</soap12:Envelope>
+HTTP/1.1 200 OK
+Content-Type: application/soap+xml; charset=utf-8
+Content-Length: length
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeResultMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFCeListagemChaves">xml</nfeResultMsg>
+  </soap12:Body>
+</soap12:Envelope>
+
+--//--
+Download de XML
+https://nfce.fazenda.sp.gov.br/ws/NFCeDownloadXML.asmx
+Serviço destinado ao download do XML de NFC-e do serviço prestado pelo Portal da Secretaria da Fazenda Estadual
+
+The following operations are supported. For a formal definition, please review the Service Description.
+
+nfceDownloadXML
+Download do XML da NFC-e
+nfceDownloadXML
+Test
+The test form is only available for requests from the local machine.
+SOAP 1.2
+The following is a sample SOAP 1.2 request and response. The placeholders shown need to be replaced with actual values.
+
+POST /ws/NFCeDownloadXML.asmx HTTP/1.1
+Host: nfce.fazenda.sp.gov.br
+Content-Type: application/soap+xml; charset=utf-8
+Content-Length: length
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeDadosMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFCeDownloadXML">xml</nfeDadosMsg>
+  </soap12:Body>
+</soap12:Envelope>
+HTTP/1.1 200 OK
+Content-Type: application/soap+xml; charset=utf-8
+Content-Length: length
+
+<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Body>
+    <nfeResultMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFCeDownloadXML">xml</nfeResultMsg>
+  </soap12:Body>
+</soap12:Envelope>

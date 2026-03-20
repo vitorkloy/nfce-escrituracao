@@ -6,3 +6,9 @@ out/
 .DS_Store
 .env*.local
 wsdl-listagem.xml
+
+# Build Electron (instalador > limite GitHub; gere com npm run build)
+release/
+
+# Dados de clientes / amostras locais
+docs/Importados/

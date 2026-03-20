@@ -103,10 +103,14 @@ $env:DEBUG="sefaz"; npm run dev
 
 ### Gerar instalador `.exe`
 
+O build gera automaticamente `public/icon.ico` e `public/icon.png` (teal) antes do Next + Electron. Para só regenerar ícones: `npm run icons`.
+
 ```bash
 npm run build
 # → release/Escrituração NFC-e Setup x.x.x.exe
 ```
+
+**Requisitos:** Node 20+, Windows x64 para o instalador NSIS. Ícones: veja `public/README.md`.
 
 ---
 
@@ -169,7 +173,8 @@ Selecione o arquivo manualmente. **Senha obrigatória** — use o botão Verific
 | Comando | Descrição |
 |---------|-----------|
 | `npm run dev` | Desenvolvimento (Next.js + Electron juntos) |
-| `npm run build` | Build completo + instalador .exe |
+| `npm run icons` | Gera `public/icon.ico` e `public/icon.png` |
+| `npm run build` | Ícones + Next + Electron + instalador .exe |
 | `npm run build:next` | Build apenas do Next.js |
 | `npm run build:electron` | Compila apenas os arquivos Electron |
 | `npm run wsdl` | Busca WSDL com certificado (diagnóstico): `npm run wsdl -- "caminho.pfx" "senha" producao` |
