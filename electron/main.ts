@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import os from 'os'
@@ -25,16 +25,50 @@ const execFileAsync = promisify(execFile)
 // Config store
 // ---------------------------------------------------------------------------
 
+type ThemePreference = 'light' | 'dark' | 'system'
+
+interface CertStorePayload {
+  pfxPath: string
+  thumbprint?: string
+  origemStore: boolean
+  ambiente: 'homologacao' | 'producao'
+}
+
 interface StoreSchema {
-  cert: {
-    pfxPath: string
-    thumbprint?: string
-    origemStore: boolean
-    ambiente: 'homologacao' | 'producao'
+  cert?: CertStorePayload
+  ui?: {
+    theme?: ThemePreference
   }
 }
 
 const store = new Store<StoreSchema>()
+
+function readTheme(): ThemePreference {
+  const ui = store.get('ui') as { theme?: ThemePreference } | undefined
+  const t = ui?.theme
+  if (t === 'light' || t === 'dark' || t === 'system') return t
+  return 'system'
+}
+
+function applyNativeThemeSource(t: ThemePreference) {
+  nativeTheme.themeSource = t
+}
+
+function windowBackgroundHex(): string {
+  const t = readTheme()
+  if (t === 'light') return '#f2f4f8'
+  if (t === 'dark') return '#0f1117'
+  return nativeTheme.shouldUseDarkColors ? '#0f1117' : '#f2f4f8'
+}
+
+function updateMainWindowBackground() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  try {
+    mainWindow.setBackgroundColor(windowBackgroundHex())
+  } catch {
+    /* ignore */
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Janela principal
@@ -74,7 +108,7 @@ function createWindow(): void {
     height: 760,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#0f1117',
+    backgroundColor: windowBackgroundHex(),
     titleBarStyle: 'hiddenInset',
     ...(icon ? { icon } : {}),
     webPreferences: {
@@ -107,6 +141,9 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  applyNativeThemeSource(readTheme())
+  nativeTheme.on('updated', () => updateMainWindowBackground())
+
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -119,6 +156,17 @@ app.on('window-all-closed', () => {
 
 // Versão do app (package.json) — instalador e electron-builder usam o mesmo campo
 ipcMain.handle('app:get-version', () => app.getVersion())
+
+ipcMain.handle('ui:get-theme', () => readTheme())
+
+ipcMain.handle('ui:set-theme', (_e, t: ThemePreference) => {
+  if (t !== 'light' && t !== 'dark' && t !== 'system') return false
+  const existingUi = store.get('ui') as Record<string, unknown> | undefined
+  store.set('ui', { ...(existingUi ?? {}), theme: t })
+  applyNativeThemeSource(t)
+  updateMainWindowBackground()
+  return true
+})
 
 // Captura exceções não tratadas no processo principal
 process.on('uncaughtException', (err) => {
@@ -589,7 +637,7 @@ ipcMain.handle('cert:selecionar-arquivo', async () => {
   }
 })
 
-ipcMain.handle('cert:salvar-config', async (_e, config: StoreSchema['cert']) => {
+ipcMain.handle('cert:salvar-config', async (_e, config: CertStorePayload) => {
   try {
     store.set('cert', config)
     return true

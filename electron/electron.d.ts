@@ -62,6 +62,8 @@ interface ProgressoLote {
   chave: string
 }
 
+type ThemePreference = 'light' | 'dark' | 'system'
+
 declare global {
   interface Window {
     electron: {
@@ -100,6 +102,10 @@ declare global {
         setBusy(busy: boolean): void
         /** Versão semver do package.json (instalador NSIS usa o mesmo número) */
         getVersion(): Promise<string>
+      }
+      ui: {
+        getTheme(): Promise<ThemePreference>
+        setTheme(t: ThemePreference): Promise<boolean>
       }
     }
   }

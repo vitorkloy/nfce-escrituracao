@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { CertInfo } from '../electron/electron.d'
+import { useAppTheme, type ThemePreference } from './theme-provider'
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -152,9 +153,9 @@ function LoadingOverlay({
 
 function Toast({ toasts, remover }: { toasts: ToastInfo[]; remover: (id: number) => void }) {
   const cores = {
-    ok:   'border-l-[var(--green)] bg-[#0d1f16]',
-    erro: 'border-l-[var(--red)] bg-[#1f0d11]',
-    info: 'border-l-[var(--teal)] bg-[#0d1a1f]',
+    ok:   'border-l-[var(--green)]',
+    erro: 'border-l-[var(--red)]',
+    info: 'border-l-[var(--teal)]',
   }
   const icons = { ok: '✓', erro: '✕', info: '◈' }
   return (
@@ -163,8 +164,12 @@ function Toast({ toasts, remover }: { toasts: ToastInfo[]; remover: (id: number)
         <div
           key={t.id}
           role="alert"
-          className={`flex items-start gap-3 px-4 py-3 rounded shadow-xl min-w-72 max-w-sm fade-in cursor-pointer ${cores[t.tipo]}`}
-          style={{ border: '1px solid var(--border)', borderLeftWidth: '4px' }}
+          className={`flex items-start gap-3 px-4 py-3 rounded shadow-xl min-w-72 max-w-sm fade-in cursor-pointer border ${cores[t.tipo]}`}
+          style={{
+            borderColor: 'var(--border)',
+            borderLeftWidth: '4px',
+            background: 'var(--bg-surface)',
+          }}
           onClick={() => remover(t.id)}
         >
           <span className="mt-0.5 text-sm shrink-0" style={{ color: t.tipo === 'ok' ? 'var(--green)' : t.tipo === 'erro' ? 'var(--red)' : 'var(--teal)' }}>
@@ -173,6 +178,42 @@ function Toast({ toasts, remover }: { toasts: ToastInfo[]; remover: (id: number)
           <span className="text-sm break-words" style={{ color: 'var(--text-primary)' }}>{t.msg}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Tema (claro / escuro / sistema)
+// ---------------------------------------------------------------------------
+
+function SeletorTema() {
+  const { theme, setTheme } = useAppTheme()
+  const opcoes: { id: ThemePreference; label: string }[] = [
+    { id: 'system', label: 'Sistema' },
+    { id: 'light', label: 'Claro' },
+    { id: 'dark', label: 'Escuro' },
+  ]
+  return (
+    <div className="mb-3 no-drag" role="group" aria-label="Tema da interface">
+      <p className="text-xs uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Tema</p>
+      <div className="flex rounded overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+        {opcoes.map((o, i) => (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => { void setTheme(o.id) }}
+            className="flex-1 py-1.5 text-xs font-medium transition-all"
+            aria-pressed={theme === o.id}
+            style={{
+              background: theme === o.id ? 'var(--teal-glow)' : 'var(--bg-raised)',
+              color: theme === o.id ? 'var(--teal)' : 'var(--text-secondary)',
+              borderRight: i < opcoes.length - 1 ? '1px solid var(--border)' : undefined,
+            }}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -806,13 +847,13 @@ function PainelListagem({
             <label className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Data inicial</label>
             <input type="datetime-local" value={dtInicial} onChange={e => setDtInicial(e.target.value)}
               className="px-3 py-2 rounded text-sm no-drag"
-              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', colorScheme: 'dark' }} />
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Data final</label>
             <input type="datetime-local" value={dtFinal} onChange={e => setDtFinal(e.target.value)}
               className="px-3 py-2 rounded text-sm no-drag"
-              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', colorScheme: 'dark' }} />
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }} />
           </div>
           <label className="flex items-center gap-2 cursor-pointer select-none no-drag" style={{ color: 'var(--text-secondary)' }}>
             <input type="checkbox" checked={paginacao} onChange={e => setPaginacao(e.target.checked)} className="w-4 h-4 accent-teal-500" />
@@ -1191,6 +1232,7 @@ export default function Home() {
         </nav>
 
         <div className="px-5 py-4" style={{ borderTop: '1px solid var(--border)' }}>
+          <SeletorTema />
           {versaoApp && (
             <p className="text-xs font-mono mb-1" style={{ color: 'var(--teal)' }} title="Versão do aplicativo">
               App v{versaoApp}

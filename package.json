@@ -1,6 +1,6 @@
 {
   "name": "nfce-escrituracao",
-  "version": "1.0.5",
+  "version": "1.0.0",
   "description": "Serviços de Apoio à Escrituração da NFC-e — SEFAZ-SP",
   "author": "Globalpac / Vitor Kloy",
   "main": "dist-electron/main.js",
