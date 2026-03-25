@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CertInfo } from '../../../electron/electron.d'
 import { useIsElectron } from '@/hooks/useIsElectron'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
+  fileNameFromPath,
   formatCnpjForDisplay,
   formatDateOnlyPtBr,
 } from '@/lib/nfce-format'
@@ -28,13 +29,35 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [passwordCheckOk, setPasswordCheckOk] = useState<boolean | null>(null)
 
+  useEffect(() => {
+    if (!isElectron) return
+    if (!certificateState.origemStore || !certificateState.thumbprint) {
+      setSelectedStoreCert(null)
+      return
+    }
+    if (selectedStoreCert?.thumbprint === certificateState.thumbprint) return
+
+    let cancelled = false
+    window.electron.cert.listarSistema().then((result) => {
+      if (cancelled || !result.ok || !result.certs) return
+      const match = result.certs.find((c) => c.thumbprint === certificateState.thumbprint)
+      if (match) setSelectedStoreCert(match)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isElectron, certificateState.origemStore, certificateState.thumbprint, selectedStoreCert?.thumbprint])
+
   function handleStoreCertSelected(cert: CertInfo) {
     setSelectedStoreCert(cert)
+    const cnpjDigits = cert.cnpj.replace(/\D/g, '')
     onCertificateChange({
       ...certificateState,
       thumbprint: cert.thumbprint,
       pfxPath: '',
       origemStore: true,
+      certificadoNome: cert.nome,
+      certificadoCnpj: cnpjDigits.length === 14 ? cnpjDigits : undefined,
     })
     setPasswordCheckOk(null)
   }
@@ -49,6 +72,8 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
           pfxPath: path,
           thumbprint: undefined,
           origemStore: false,
+          certificadoNome: fileNameFromPath(path),
+          certificadoCnpj: undefined,
         })
         setPasswordCheckOk(null)
       }
@@ -181,7 +206,12 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
                   type="button"
                   onClick={() => {
                     setSelectedStoreCert(null)
-                    onCertificateChange({ ...certificateState, thumbprint: undefined })
+                    onCertificateChange({
+                      ...certificateState,
+                      thumbprint: undefined,
+                      certificadoNome: undefined,
+                      certificadoCnpj: undefined,
+                    })
                   }}
                   className="text-xs no-drag px-2 py-1 rounded"
                   style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}

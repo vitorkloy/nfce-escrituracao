@@ -16,6 +16,10 @@ export interface CertificateUiState {
   origemStore: boolean
   senha: string
   ambiente: SefazEnvironment
+  /** Nome exibido na sidebar (completo; o layout trunca com ellipsis). */
+  certificadoNome?: string
+  /** CNPJ somente dígitos (14), para formatar na UI. */
+  certificadoCnpj?: string
 }
 
 export interface KeyListItem {

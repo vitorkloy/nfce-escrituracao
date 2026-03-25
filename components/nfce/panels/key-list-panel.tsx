@@ -276,7 +276,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
             className="flex items-center gap-2 px-5 py-2 rounded text-sm font-semibold transition-all no-drag ml-auto"
             style={{
               background: isSearching ? 'var(--bg-raised)' : 'var(--teal)',
-              color: isSearching ? 'var(--text-muted)' : '#000',
+              color: isSearching ? 'var(--text-muted)' : 'var(--text-on-accent)',
             }}
           >
             {isSearching ? (
@@ -284,7 +284,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
                 <Spinner /> {listingProgress > 0 ? `${listingProgress} chaves…` : 'Buscando…'}
               </>
             ) : (
-              '↗ Buscar'
+              '🔎︎ Buscar'
             )}
           </button>
         </div>

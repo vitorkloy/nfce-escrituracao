@@ -8,6 +8,11 @@ import { KeyListPanel } from '@/components/nfce/panels/key-list-panel'
 import { DownloadXmlPanel } from '@/components/nfce/panels/download-xml-panel'
 import { LoadingOverlay } from '@/components/nfce/ui/loading-overlay'
 import { ToastStack } from '@/components/nfce/ui/toast-stack'
+import {
+  fileNameFromPath,
+  formatCnpjForDisplay,
+  storeCertificateSidebarFallback,
+} from '@/lib/nfce-format'
 import type { AppTab, CertificateUiState, LoadingUiState, ToastMessage, ToastVariant } from '@/types/nfce-app'
 
 const MAX_VISIBLE_TOASTS = 5
@@ -38,19 +43,64 @@ export default function Home() {
     if (!isElectron) return
     window.electron.cert
       .carregarConfig()
-      .then((saved) => {
-        if (saved) {
-          setCertificateState((prev) => ({
-            ...prev,
-            pfxPath: saved.pfxPath ?? '',
-            thumbprint: saved.thumbprint,
-            origemStore: saved.origemStore ?? false,
-            ambiente: saved.ambiente ?? 'homologacao',
-          }))
+      .then(async (saved) => {
+        if (!saved) return
+
+        let certificadoNome: string | undefined
+        let certificadoCnpj: string | undefined
+
+        if (saved.origemStore && saved.thumbprint) {
+          try {
+            const listed = await window.electron.cert.listarSistema()
+            if (listed.ok && listed.certs) {
+              const match = listed.certs.find((c) => c.thumbprint === saved.thumbprint)
+              if (match) {
+                certificadoNome = match.nome
+                const digits = match.cnpj.replace(/\D/g, '')
+                certificadoCnpj = digits.length === 14 ? digits : undefined
+              }
+            }
+          } catch {
+            /* mantém sidebar com fallback por thumbprint */
+          }
+        } else if (!saved.origemStore && saved.pfxPath) {
+          certificadoNome = fileNameFromPath(saved.pfxPath)
         }
+
+        setCertificateState((prev) => ({
+          ...prev,
+          pfxPath: saved.pfxPath ?? '',
+          thumbprint: saved.thumbprint,
+          origemStore: saved.origemStore ?? false,
+          ambiente: saved.ambiente ?? 'homologacao',
+          certificadoNome,
+          certificadoCnpj,
+        }))
       })
       .catch((err) => console.warn('[App] Falha ao carregar config:', err))
   }, [isElectron])
+
+  /** Se ainda houver thumbprint sem nome (corrida / loja indisponível no boot), tenta de novo. */
+  useEffect(() => {
+    if (!isElectron) return
+    if (!certificateState.origemStore || !certificateState.thumbprint || certificateState.certificadoNome) return
+
+    let cancelled = false
+    window.electron.cert.listarSistema().then((result) => {
+      if (cancelled || !result.ok || !result.certs) return
+      const match = result.certs.find((c) => c.thumbprint === certificateState.thumbprint)
+      if (!match) return
+      const digits = match.cnpj.replace(/\D/g, '')
+      setCertificateState((prev) => ({
+        ...prev,
+        certificadoNome: match.nome,
+        certificadoCnpj: digits.length === 14 ? digits : prev.certificadoCnpj,
+      }))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isElectron, certificateState.origemStore, certificateState.thumbprint, certificateState.certificadoNome])
 
   useEffect(() => {
     if (!isElectron) return
@@ -69,6 +119,10 @@ export default function Home() {
   const certificateReady =
     (certificateState.origemStore && Boolean(certificateState.thumbprint)) ||
     (!certificateState.origemStore && Boolean(certificateState.pfxPath) && Boolean(certificateState.senha))
+
+  const hasSelectedCertificate =
+    (certificateState.origemStore && Boolean(certificateState.thumbprint)) ||
+    (!certificateState.origemStore && Boolean(certificateState.pfxPath))
 
   return (
     <div className="flex h-screen" style={{ background: 'var(--bg-deep)', userSelect: 'none' }}>
@@ -93,6 +147,59 @@ export default function Home() {
             <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
               {certificateReady ? certificateState.ambiente : 'sem certificado'}
             </span>
+          </div>
+
+          <div
+            className="mt-3 max-w-full rounded px-2.5 py-2 transition-[border-color,background-color] duration-150"
+            style={{
+              border: hasSelectedCertificate
+                ? '1px solid var(--teal)'
+                : '1px dashed var(--text-muted)',
+              background: hasSelectedCertificate ? 'var(--teal-glow)' : 'transparent',
+            }}
+          >
+            <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>
+              Certificado
+            </p>
+            {(() => {
+              const hasStoreCert = certificateState.origemStore && Boolean(certificateState.thumbprint)
+              const hasPfxFile = !certificateState.origemStore && Boolean(certificateState.pfxPath)
+              if (!hasStoreCert && !hasPfxFile) {
+                return (
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Nenhum
+                  </p>
+                )
+              }
+              const fallbackStore = storeCertificateSidebarFallback(certificateState.thumbprint)
+              const nomeExibicao = certificateState.certificadoNome
+                ? certificateState.certificadoNome
+                : hasPfxFile
+                  ? fileNameFromPath(certificateState.pfxPath)
+                  : fallbackStore.primary
+              const tituloLinha = certificateState.certificadoNome
+                ? certificateState.certificadoNome
+                : hasPfxFile
+                  ? certificateState.pfxPath
+                  : fallbackStore.title
+              const cnpjDigits = certificateState.certificadoCnpj
+              return (
+                <div className="min-w-0">
+                  <p
+                    className="text-xs font-medium truncate leading-snug"
+                    style={{ color: 'var(--text-primary)' }}
+                    title={tituloLinha}
+                  >
+                    {nomeExibicao}
+                  </p>
+                  {cnpjDigits && cnpjDigits.length === 14 && (
+                    <p className="text-xs font-mono mt-1 leading-tight break-all" style={{ color: 'var(--text-secondary)' }}>
+                      {formatCnpjForDisplay(cnpjDigits)}
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         </div>
 

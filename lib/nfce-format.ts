@@ -1,6 +1,33 @@
 /** Comprimento da chave de acesso (NFC-e / NF-e). */
 export const TAMANHO_CHAVE_ACESSO = 44
 
+/** Último segmento de um caminho Windows ou POSIX (nome do arquivo). */
+export function fileNameFromPath(filePath: string): string {
+  const i = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
+  return i === -1 ? filePath : filePath.slice(i + 1)
+}
+
+/**
+ * Texto da sidebar quando o certificado vem da loja Windows mas o nome ainda não foi resolvido
+ * (ex.: a listagem da loja falhou ou o cert não aparece em certmgr).
+ */
+export function storeCertificateSidebarFallback(thumbprint: string | undefined): {
+  primary: string
+  title: string
+} {
+  const normalized = thumbprint?.replace(/\s/g, '') ?? ''
+  if (normalized.length >= 8) {
+    return {
+      primary: `Repositório Windows · ${normalized.slice(0, 8)}…`,
+      title: `Certificado do repositório do Windows. Thumbprint: ${normalized}`,
+    }
+  }
+  return {
+    primary: 'Repositório Windows',
+    title: 'Certificado do repositório do Windows',
+  }
+}
+
 const REGEX_CHAVE_SEGMENTADA = /^(\d{4})(\d{2})(\d{8})(\d{6})(\d{9})(\d{9})(\d{6})$/
 const REGEX_CNPJ_FORMATADO = /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/
 

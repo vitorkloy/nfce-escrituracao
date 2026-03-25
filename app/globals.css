@@ -30,6 +30,9 @@ html[data-theme="dark"] {
   --red:        #ff4d6a;
   --green:      #7dd3fc;
 
+  /* Texto sobre fundo --teal (botões primários) */
+  --text-on-accent: #000;
+
   --radius-sm:  4px;
   --radius:     8px;
   --radius-lg:  12px;
@@ -60,6 +63,8 @@ html[data-theme="light"] {
   --amber:      #c77d0a;
   --red:        #d9304c;
   --green:      #2563eb;
+
+  --text-on-accent: #fff;
 
   --radius-sm:  4px;
   --radius:     8px;
@@ -93,6 +98,8 @@ html[data-theme="light"] {
     --red:        #ff4d6a;
     --green:      #7dd3fc;
 
+    --text-on-accent: #000;
+
     --radius-sm:  4px;
     --radius:     8px;
     --radius-lg:  12px;
@@ -125,6 +132,8 @@ html[data-theme="light"] {
     --amber:      #c77d0a;
     --red:        #d9304c;
     --green:      #2563eb;
+
+    --text-on-accent: #fff;
 
     --radius-sm:  4px;
     --radius:     8px;

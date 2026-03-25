@@ -102,7 +102,7 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
             className="flex items-center gap-2 px-5 py-2.5 rounded text-sm font-semibold no-drag"
             style={{
               background: isLoading ? 'var(--bg-raised)' : 'var(--teal)',
-              color: isLoading ? 'var(--text-muted)' : '#000',
+              color: isLoading ? 'var(--text-muted)' : 'var(--text-on-accent)',
             }}
           >
             {isLoading ? (
