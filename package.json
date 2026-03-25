@@ -11,7 +11,8 @@
     "build:next": "next build",
     "build:electron": "tsc -p tsconfig.electron.json",
     "dist": "npm run build",
-    "wsdl": "node scripts/buscar-wsdl.js"
+    "wsdl": "node scripts/buscar-wsdl.js",
+    "diagnostico:listagem": "node scripts/diagnostico-listagem.cjs"
   },
   "dependencies": {
     "axios": "^1.7.2",
