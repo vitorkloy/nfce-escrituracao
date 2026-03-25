@@ -1,0 +1,482 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useIsElectron } from '@/hooks/useIsElectron'
+import { getErrorMessage } from '@/lib/error-utils'
+import {
+  extractIssuerCnpjFromAccessKey,
+  formatAccessKeyForDisplay,
+  formatCnpjForDisplay,
+  normalizeDatetimeForSefaz,
+  formatDateForDatetimeLocalInput,
+} from '@/lib/nfce-format'
+import type {
+  BatchDownloadResponse,
+  CertificateUiState,
+  EmitenteFilter,
+  KeyListItem,
+  LoadingUiState,
+  ToastVariant,
+} from '@/types/nfce-app'
+import { CertificatePasswordWarning } from '@/components/nfce/certificate-password-warning'
+import { Badge } from '@/components/nfce/ui/badge'
+import { Spinner } from '@/components/nfce/ui/spinner'
+
+export interface KeyListPanelProps {
+  certificateState: CertificateUiState
+  showToast: (variant: ToastVariant, message: string) => void
+  onLoadingStateChange: (state: LoadingUiState) => void
+}
+
+export function KeyListPanel({ certificateState, showToast, onLoadingStateChange }: KeyListPanelProps) {
+  const { isElectron } = useIsElectron()
+  const today = new Date()
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+
+  const [startDateTime, setStartDateTime] = useState(formatDateForDatetimeLocalInput(monthStart))
+  const [endDateTime, setEndDateTime] = useState(formatDateForDatetimeLocalInput(today))
+  const [autoPaginate, setAutoPaginate] = useState(true)
+  const [isSearching, setIsSearching] = useState(false)
+  const [listingProgress, setListingProgress] = useState(0)
+  const [keys, setKeys] = useState<KeyListItem[]>([])
+  const [keyFilterText, setKeyFilterText] = useState('')
+  const [certificateCnpjDigits, setCertificateCnpjDigits] = useState('')
+  const [emitenteFilter, setEmitenteFilter] = useState<EmitenteFilter>('todos')
+
+  useEffect(() => {
+    if (!isElectron) return
+    const unsubscribe = window.electron.sefaz.onProgressoListagem((total) => {
+      setListingProgress(total)
+      if (isSearching) onLoadingStateChange({ type: 'listagem', total })
+    })
+    return unsubscribe
+  }, [isElectron, isSearching, onLoadingStateChange])
+
+  useEffect(() => {
+    if (!isElectron) return
+    const unsubscribe = window.electron.sefaz.onProgressoLote((info) => {
+      onLoadingStateChange({ type: 'lote', atual: info.atual, total: info.total })
+    })
+    return unsubscribe
+  }, [isElectron, onLoadingStateChange])
+
+  async function searchKeys() {
+    if (!isElectron) {
+      showToast('erro', 'Funcionalidade disponível apenas no aplicativo desktop.')
+      return
+    }
+    if (!certificateState.origemStore && !certificateState.senha) {
+      showToast('erro', 'Configure a senha do certificado primeiro.')
+      return
+    }
+    if (!certificateState.thumbprint && !certificateState.pfxPath) {
+      showToast('erro', 'Selecione um certificado na aba Configuração.')
+      return
+    }
+    if (!startDateTime) {
+      showToast('erro', 'Informe a data inicial.')
+      return
+    }
+
+    setIsSearching(true)
+    setListingProgress(0)
+    setKeys([])
+    onLoadingStateChange({ type: 'listagem', total: 0 })
+    if (isElectron && window.electron?.app) window.electron.app.setBusy(true)
+
+    try {
+      const response = await window.electron.sefaz.listarChaves(
+        certificateState as never,
+        normalizeDatetimeForSefaz(startDateTime),
+        endDateTime ? normalizeDatetimeForSefaz(endDateTime) : undefined,
+        autoPaginate
+      )
+
+      if (!response.ok) {
+        showToast('erro', response.xMotivo ?? 'Erro desconhecido ao consultar a SEFAZ.')
+        return
+      }
+
+      const items: KeyListItem[] = (response.chaves ?? []).map((chave) => ({
+        chave,
+        selecionada: false,
+      }))
+      setKeys(items)
+      setCertificateCnpjDigits((response as { cnpj?: string }).cnpj ?? '')
+      setEmitenteFilter('todos')
+
+      if (items.length === 0) {
+        showToast('info', 'Nenhuma NFC-e encontrada no período informado.')
+      } else {
+        showToast('ok', `${items.length} chave(s) encontrada(s).`)
+      }
+    } catch (err) {
+      showToast('erro', `Erro inesperado: ${getErrorMessage(err, 'Tente novamente.')}`)
+    } finally {
+      setIsSearching(false)
+      onLoadingStateChange({ type: null })
+      if (isElectron && window.electron?.app) window.electron.app.setBusy(false)
+    }
+  }
+
+  function toggleKeySelected(accessKey: string) {
+    setKeys((prev) =>
+      prev.map((item) =>
+        item.chave === accessKey ? { ...item, selecionada: !item.selecionada } : item
+      )
+    )
+  }
+
+  function toggleAllVisible() {
+    const allVisibleSelected =
+      visibleRows.length > 0 && visibleRows.every((row) => row.selecionada)
+    const visibleSet = new Set(visibleRows.map((row) => row.chave))
+    setKeys((prev) =>
+      prev.map((item) =>
+        visibleSet.has(item.chave) ? { ...item, selecionada: !allVisibleSelected } : item
+      )
+    )
+  }
+
+  const selectedKeys = keys.filter((item) => item.selecionada)
+  const certificateCnpjNormalized = certificateCnpjDigits.replace(/\D/g, '')
+
+  const countByIssuerCnpj = keys.reduce<Record<string, number>>((acc, item) => {
+    const issuerCnpj = extractIssuerCnpjFromAccessKey(item.chave)
+    if (issuerCnpj) acc[issuerCnpj] = (acc[issuerCnpj] ?? 0) + 1
+    return acc
+  }, {})
+  const uniqueIssuerCnpjs = Object.keys(countByIssuerCnpj).sort()
+  const matrizCount = certificateCnpjNormalized ? (countByIssuerCnpj[certificateCnpjNormalized] ?? 0) : 0
+
+  function matchesEmitenteFilter(accessKey: string): boolean {
+    const issuerFromKey = extractIssuerCnpjFromAccessKey(accessKey)
+    if (emitenteFilter === 'todos') return true
+    if (emitenteFilter === 'matriz') {
+      return Boolean(certificateCnpjNormalized && issuerFromKey === certificateCnpjNormalized)
+    }
+    if (emitenteFilter === 'filiais') {
+      return Boolean(certificateCnpjNormalized && issuerFromKey !== certificateCnpjNormalized)
+    }
+    return issuerFromKey === emitenteFilter
+  }
+
+  const afterTextFilter = keyFilterText
+    ? keys.filter((item) => item.chave.includes(keyFilterText))
+    : keys
+  const visibleRows = afterTextFilter.filter((item) => matchesEmitenteFilter(item.chave))
+
+  async function downloadBatchXml() {
+    if (!isElectron) return
+    if (selectedKeys.length === 0) {
+      showToast('info', 'Selecione ao menos uma chave.')
+      return
+    }
+
+    let targetFolder: string | null = null
+    try {
+      targetFolder = await window.electron.fs.selecionarPasta()
+    } catch (err) {
+      showToast('erro', `Erro ao selecionar pasta: ${getErrorMessage(err, 'Erro')}`)
+      return
+    }
+
+    if (!targetFolder) return
+
+    showToast('info', `Iniciando download de ${selectedKeys.length} XMLs…`)
+    onLoadingStateChange({ type: 'lote', atual: 0, total: selectedKeys.length })
+    if (isElectron && window.electron?.app) window.electron.app.setBusy(true)
+
+    try {
+      const rawResult = await window.electron.sefaz.downloadLote(
+        certificateState as never,
+        selectedKeys.map((item) => item.chave),
+        targetFolder
+      )
+      const resultado = rawResult as BatchDownloadResponse
+      const resultados = resultado.resultados ?? []
+      const failed = resultados.filter((r) => !r.ok)
+      const errorCount = failed.length
+
+      if (errorCount === 0) {
+        showToast('ok', `${selectedKeys.length} XML(s) salvos com sucesso.`)
+        try {
+          await window.electron.fs.abrirPasta(targetFolder)
+        } catch {
+          /* pasta já foi escolhida; falha ao abrir é opcional */
+        }
+      } else {
+        const firstError = (failed[0]?.erro ?? 'Erro desconhecido').slice(0, 150)
+        const ellipsis = (failed[0]?.erro?.length ?? 0) > 150 ? '…' : ''
+        showToast(
+          'erro',
+          `${selectedKeys.length - errorCount} OK · ${errorCount} com erro: ${firstError}${ellipsis}`
+        )
+      }
+    } catch (err) {
+      showToast('erro', `Falha no download em lote: ${getErrorMessage(err, 'Erro')}`)
+    } finally {
+      onLoadingStateChange({ type: null })
+      if (isElectron && window.electron?.app) window.electron.app.setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fade-in flex flex-col h-full">
+      <div className="p-6 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
+        <h2 className="text-xl font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
+          Listagem de Chaves
+        </h2>
+
+        {!certificateState.origemStore && !certificateState.senha && certificateState.pfxPath && (
+          <CertificatePasswordWarning context="listagem" />
+        )}
+
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+              Data inicial
+            </label>
+            <input
+              type="datetime-local"
+              value={startDateTime}
+              onChange={(e) => setStartDateTime(e.target.value)}
+              className="px-3 py-2 rounded text-sm no-drag"
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+              Data final
+            </label>
+            <input
+              type="datetime-local"
+              value={endDateTime}
+              onChange={(e) => setEndDateTime(e.target.value)}
+              className="px-3 py-2 rounded text-sm no-drag"
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}
+            />
+          </div>
+          <label
+            className="flex items-center gap-2 cursor-pointer select-none no-drag"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            <input
+              type="checkbox"
+              checked={autoPaginate}
+              onChange={(e) => setAutoPaginate(e.target.checked)}
+              className="w-4 h-4 accent-teal-500"
+            />
+            <span className="text-sm">Paginação automática</span>
+          </label>
+          <button
+            type="button"
+            onClick={searchKeys}
+            disabled={isSearching}
+            className="flex items-center gap-2 px-5 py-2 rounded text-sm font-semibold transition-all no-drag ml-auto"
+            style={{
+              background: isSearching ? 'var(--bg-raised)' : 'var(--teal)',
+              color: isSearching ? 'var(--text-muted)' : '#000',
+            }}
+          >
+            {isSearching ? (
+              <>
+                <Spinner /> {listingProgress > 0 ? `${listingProgress} chaves…` : 'Buscando…'}
+              </>
+            ) : (
+              '↗ Buscar'
+            )}
+          </button>
+        </div>
+      </div>
+
+      {keys.length > 0 && (
+        <div
+          className="flex flex-col gap-2 px-6 py-3"
+          style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}
+        >
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {keys.length} chaves
+              {selectedKeys.length > 0 && (
+                <>
+                  {' '}
+                  · <span style={{ color: 'var(--teal)' }}>{selectedKeys.length} selecionadas</span>
+                </>
+              )}
+            </span>
+            {certificateCnpjNormalized && (
+              <select
+                value={emitenteFilter}
+                onChange={(e) => setEmitenteFilter(e.target.value as EmitenteFilter)}
+                className="px-3 py-1.5 rounded text-xs no-drag"
+                style={{
+                  background: 'var(--bg-raised)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
+                }}
+                aria-label="Filtrar por emitente"
+              >
+                <option value="todos">Todas</option>
+                <option value="matriz">Só Matriz</option>
+                <option value="filiais">Só Filiais</option>
+                {uniqueIssuerCnpjs
+                  .filter((cnpj) => cnpj !== certificateCnpjNormalized)
+                  .map((cnpj) => (
+                    <option key={cnpj} value={cnpj}>
+                      Filial {formatCnpjForDisplay(cnpj)}
+                    </option>
+                  ))}
+              </select>
+            )}
+            <input
+              type="text"
+              value={keyFilterText}
+              onChange={(e) => setKeyFilterText(e.target.value)}
+              placeholder="Filtrar chaves…"
+              className="px-3 py-1.5 rounded text-xs no-drag w-56"
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}
+            />
+            {selectedKeys.length > 0 && (
+              <div className="flex items-center gap-3 ml-auto">
+                {certificateCnpjNormalized &&
+                  (() => {
+                    const selectedMatriz = selectedKeys.filter(
+                      (item) => extractIssuerCnpjFromAccessKey(item.chave) === certificateCnpjNormalized
+                    ).length
+                    const selectedFiliais = selectedKeys.length - selectedMatriz
+                    const parts: string[] = []
+                    if (selectedMatriz > 0) parts.push(`${selectedMatriz} Matriz`)
+                    if (selectedFiliais > 0) parts.push(`${selectedFiliais} Filiais`)
+                    return parts.length > 0 ? (
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {parts.join(' · ')}
+                      </span>
+                    ) : null
+                  })()}
+                <button
+                  type="button"
+                  onClick={downloadBatchXml}
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded text-xs font-semibold no-drag"
+                  style={{
+                    background: 'var(--teal-glow)',
+                    border: '1px solid var(--teal-dim)',
+                    color: 'var(--teal)',
+                  }}
+                >
+                  ↓ Baixar XMLs ({selectedKeys.length})
+                </button>
+              </div>
+            )}
+          </div>
+          {certificateCnpjNormalized && (
+            <div className="flex flex-wrap gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+              {matrizCount > 0 && <span>{matrizCount} Matriz</span>}
+              {uniqueIssuerCnpjs
+                .filter((cnpj) => cnpj !== certificateCnpjNormalized)
+                .map((cnpj) => (
+                  <span key={cnpj}>
+                    {countByIssuerCnpj[cnpj] ?? 0} Filial {formatCnpjForDisplay(cnpj)}
+                  </span>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex-1 overflow-auto">
+        {keys.length === 0 && !isSearching && (
+          <div
+            className="flex flex-col items-center justify-center h-full gap-3"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <span className="text-4xl">◫</span>
+            <span className="text-sm">Nenhuma busca realizada</span>
+          </div>
+        )}
+        {keys.length > 0 && (
+          <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
+                <th className="px-4 py-3 text-left w-10">
+                  <input
+                    type="checkbox"
+                    checked={visibleRows.length > 0 && visibleRows.every((row) => row.selecionada)}
+                    onChange={toggleAllVisible}
+                    aria-label="Selecionar todas"
+                  />
+                </th>
+                <th
+                  className="px-4 py-3 text-left text-xs uppercase tracking-widest w-12"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  #
+                </th>
+                <th
+                  className="px-4 py-3 text-left text-xs uppercase tracking-widest"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  Chave de Acesso
+                </th>
+                {certificateCnpjNormalized && (
+                  <th
+                    className="px-4 py-3 text-left text-xs uppercase tracking-widest w-40"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Emitente
+                  </th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.map((item, index) => {
+                const issuerCnpj = extractIssuerCnpjFromAccessKey(item.chave)
+                const isMatriz = certificateCnpjNormalized && issuerCnpj === certificateCnpjNormalized
+                return (
+                  <tr
+                    key={item.chave}
+                    className="transition-colors cursor-pointer"
+                    style={{
+                      borderBottom: '1px solid var(--border)',
+                      background: item.selecionada
+                        ? 'var(--teal-glow)'
+                        : index % 2 === 0
+                          ? 'transparent'
+                          : 'var(--bg-surface)',
+                    }}
+                    onClick={() => toggleKeySelected(item.chave)}
+                  >
+                    <td className="px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={item.selecionada}
+                        onChange={() => {}}
+                        aria-label={`Selecionar chave ${item.chave}`}
+                      />
+                    </td>
+                    <td
+                      className="px-4 py-2.5 tabular-nums"
+                      style={{ color: 'var(--text-muted)', fontSize: '11px' }}
+                    >
+                      {index + 1}
+                    </td>
+                    <td className="px-4 py-2.5 chave-acesso">{formatAccessKeyForDisplay(item.chave)}</td>
+                    {certificateCnpjNormalized && (
+                      <td className="px-4 py-2.5">
+                        {isMatriz ? (
+                          <Badge tone="green" label="Matriz" />
+                        ) : (
+                          <Badge tone="teal" label={`Filial ${formatCnpjForDisplay(issuerCnpj)}`} />
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}

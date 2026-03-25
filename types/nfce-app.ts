@@ -1,0 +1,49 @@
+/**
+ * Tipos compartilhados da UI (certificado, listagem, download).
+ * Mantidos fora dos componentes para leitura e reutilização mais simples.
+ */
+
+export type AppTab = 'config' | 'listagem' | 'download'
+
+export type SefazEnvironment = 'homologacao' | 'producao'
+
+export type CertificateSourceMode = 'store' | 'arquivo'
+
+/** Estado do certificado na UI (inclui senha só em memória). */
+export interface CertificateUiState {
+  pfxPath: string
+  thumbprint?: string
+  origemStore: boolean
+  senha: string
+  ambiente: SefazEnvironment
+}
+
+export interface KeyListItem {
+  chave: string
+  selecionada: boolean
+}
+
+export type ToastVariant = 'ok' | 'erro' | 'info'
+
+export interface ToastMessage {
+  id: number
+  tipo: ToastVariant
+  msg: string
+}
+
+export type OverlayKind = 'listagem' | 'lote'
+
+export interface LoadingUiState {
+  type: OverlayKind | null
+  atual?: number
+  total?: number
+}
+
+/** Resposta tipada do IPC de download em lote (alinhada ao retorno do main). */
+export interface BatchDownloadResponse {
+  ok?: boolean
+  resultados?: Array<{ chave: string; ok: boolean; erro?: string }>
+  xMotivo?: string
+}
+
+export type EmitenteFilter = 'todos' | 'matriz' | 'filiais' | (string & {})
