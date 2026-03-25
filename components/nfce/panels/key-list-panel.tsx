@@ -265,7 +265,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
               type="checkbox"
               checked={autoPaginate}
               onChange={(e) => setAutoPaginate(e.target.checked)}
-              className="w-4 h-4 accent-teal-500"
+              className="w-4 h-4 accent-blue-500"
             />
             <span className="text-sm">Paginação automática</span>
           </label>

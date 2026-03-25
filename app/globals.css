@@ -22,13 +22,13 @@ html[data-theme="dark"] {
   --text-secondary: #8994a8;
   --text-muted:     #4f5b70;
 
-  --teal:       #00d4aa;
-  --teal-dim:   #00a884;
-  --teal-glow:  rgba(0, 212, 170, 0.12);
+  --teal:       #58b4ff;
+  --teal-dim:   #3d8fef;
+  --teal-glow:  rgba(88, 180, 255, 0.14);
 
   --amber:      #f5a623;
   --red:        #ff4d6a;
-  --green:      #22c98a;
+  --green:      #7dd3fc;
 
   --radius-sm:  4px;
   --radius:     8px;
@@ -53,13 +53,13 @@ html[data-theme="light"] {
   --text-secondary: #3d4f66;
   --text-muted:     #6b7c90;
 
-  --teal:       #008f73;
-  --teal-dim:   #007a62;
-  --teal-glow:  rgba(0, 143, 115, 0.14);
+  --teal:       #1d4ed8;
+  --teal-dim:   #1e40af;
+  --teal-glow:  rgba(29, 78, 216, 0.12);
 
   --amber:      #c77d0a;
   --red:        #d9304c;
-  --green:      #0d9f6e;
+  --green:      #2563eb;
 
   --radius-sm:  4px;
   --radius:     8px;
@@ -85,13 +85,13 @@ html[data-theme="light"] {
     --text-secondary: #8994a8;
     --text-muted:     #4f5b70;
 
-    --teal:       #00d4aa;
-    --teal-dim:   #00a884;
-    --teal-glow:  rgba(0, 212, 170, 0.12);
+    --teal:       #58b4ff;
+    --teal-dim:   #3d8fef;
+    --teal-glow:  rgba(88, 180, 255, 0.14);
 
     --amber:      #f5a623;
     --red:        #ff4d6a;
-    --green:      #22c98a;
+    --green:      #7dd3fc;
 
     --radius-sm:  4px;
     --radius:     8px;
@@ -118,13 +118,13 @@ html[data-theme="light"] {
     --text-secondary: #3d4f66;
     --text-muted:     #6b7c90;
 
-    --teal:       #008f73;
-    --teal-dim:   #007a62;
-    --teal-glow:  rgba(0, 143, 115, 0.14);
+    --teal:       #1d4ed8;
+    --teal-dim:   #1e40af;
+    --teal-glow:  rgba(29, 78, 216, 0.12);
 
     --amber:      #c77d0a;
     --red:        #d9304c;
-    --green:      #0d9f6e;
+    --green:      #2563eb;
 
     --radius-sm:  4px;
     --radius:     8px;
