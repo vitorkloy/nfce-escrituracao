@@ -75,6 +75,8 @@ function updateMainWindowBackground() {
 // ---------------------------------------------------------------------------
 
 let mainWindow: BrowserWindow | null = null
+let appEstaOcupada = false
+let ignorarConfirmacaoFechamento = false
 
 /** Ícone da janela / taskbar: empacotado usa extraResources; em dev usa public/. */
 function resolveWindowIcon(): string | undefined {
@@ -132,6 +134,31 @@ function createWindow(): void {
     })
   }
 
+  mainWindow.on('close', (event) => {
+    if (!appEstaOcupada || ignorarConfirmacaoFechamento) return
+
+    event.preventDefault()
+    const win = mainWindow
+    if (!win) return
+
+    const escolha = dialog.showMessageBoxSync(win, {
+      type: 'warning',
+      title: 'Processo em andamento',
+      message: 'Existe uma operação em andamento.',
+      detail:
+        'Se fechar agora, a busca/download será interrompida e o progresso atual será perdido.\n\nDeseja realmente fechar?',
+      buttons: ['Cancelar', 'Fechar mesmo assim'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    })
+
+    if (escolha === 1) {
+      ignorarConfirmacaoFechamento = true
+      mainWindow?.close()
+    }
+  })
+
   mainWindow.on('closed', () => { mainWindow = null })
 
   // Log erros de render não capturados
@@ -156,6 +183,9 @@ app.on('window-all-closed', () => {
 
 // Versão do app (package.json) — instalador e electron-builder usam o mesmo campo
 ipcMain.handle('app:get-version', () => app.getVersion())
+ipcMain.on('app:set-busy', (_e, busy: boolean) => {
+  appEstaOcupada = Boolean(busy)
+})
 
 ipcMain.handle('ui:get-theme', () => readTheme())
 
