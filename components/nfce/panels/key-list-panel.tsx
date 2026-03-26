@@ -20,6 +20,7 @@ import type {
 } from '@/types/nfce-app'
 import { CertificatePasswordWarning } from '@/components/nfce/certificate-password-warning'
 import { Badge } from '@/components/nfce/ui/badge'
+import { BUTTON_PRIMARY_CLASS, BUTTON_TEAL_GHOST_CLASS, INPUT_BASE_CLASS, SURFACE_CARD_CLASS } from '@/components/nfce/ui/classes'
 import { Spinner } from '@/components/nfce/ui/spinner'
 
 export interface KeyListPanelProps {
@@ -223,8 +224,8 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
 
   return (
     <div className="fade-in flex flex-col h-full">
-      <div className="p-6 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
-        <h2 className="text-xl font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
+      <div className="p-6 pb-4 border-b border-[var(--border)]">
+        <h2 className="text-xl font-semibold mb-4 text-[var(--text-primary)]">
           Listagem de Chaves
         </h2>
 
@@ -234,33 +235,28 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
 
         <div className="flex flex-wrap gap-3 items-end">
           <div className="flex flex-col gap-1">
-            <label className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+            <label className="text-xs uppercase tracking-widest text-[var(--text-muted)]">
               Data inicial
             </label>
             <input
               type="datetime-local"
               value={startDateTime}
               onChange={(e) => setStartDateTime(e.target.value)}
-              className="px-3 py-2 rounded text-sm no-drag"
-              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}
+              className={`px-3 py-2 text-sm ${INPUT_BASE_CLASS}`}
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+            <label className="text-xs uppercase tracking-widest text-[var(--text-muted)]">
               Data final
             </label>
             <input
               type="datetime-local"
               value={endDateTime}
               onChange={(e) => setEndDateTime(e.target.value)}
-              className="px-3 py-2 rounded text-sm no-drag"
-              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}
+              className={`px-3 py-2 text-sm ${INPUT_BASE_CLASS}`}
             />
           </div>
-          <label
-            className="flex items-center gap-2 cursor-pointer select-none no-drag"
-            style={{ color: 'var(--text-secondary)' }}
-          >
+          <label className="flex items-center gap-2 cursor-pointer select-none no-drag text-[var(--text-secondary)]">
             <input
               type="checkbox"
               checked={autoPaginate}
@@ -273,11 +269,12 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
             type="button"
             onClick={searchKeys}
             disabled={isSearching}
-            className="flex items-center gap-2 px-5 py-2 rounded text-sm font-semibold transition-all no-drag ml-auto"
-            style={{
-              background: isSearching ? 'var(--bg-raised)' : 'var(--teal)',
-              color: isSearching ? 'var(--text-muted)' : 'var(--text-on-accent)',
-            }}
+            className={[
+              `flex items-center gap-2 px-5 py-2 text-sm transition-all ml-auto ${BUTTON_PRIMARY_CLASS}`,
+              isSearching
+                ? 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
+                : '',
+            ].join(' ')}
           >
             {isSearching ? (
               <>
@@ -291,17 +288,14 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
       </div>
 
       {keys.length > 0 && (
-        <div
-          className="flex flex-col gap-2 px-6 py-3"
-          style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}
-        >
+        <div className={`flex flex-col gap-2 px-6 py-3 border-b border-[var(--border)] ${SURFACE_CARD_CLASS}`}>
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            <span className="text-sm text-[var(--text-secondary)]">
               {keys.length} chaves
               {selectedKeys.length > 0 && (
                 <>
                   {' '}
-                  · <span style={{ color: 'var(--teal)' }}>{selectedKeys.length} selecionadas</span>
+                  · <span className="text-[var(--teal)]">{selectedKeys.length} selecionadas</span>
                 </>
               )}
             </span>
@@ -309,12 +303,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
               <select
                 value={emitenteFilter}
                 onChange={(e) => setEmitenteFilter(e.target.value as EmitenteFilter)}
-                className="px-3 py-1.5 rounded text-xs no-drag"
-                style={{
-                  background: 'var(--bg-raised)',
-                  border: '1px solid var(--border)',
-                  color: 'var(--text-primary)',
-                }}
+                className="px-3 py-1.5 rounded text-xs no-drag bg-[var(--bg-raised)] border border-[var(--border)] text-[var(--text-primary)]"
                 aria-label="Filtrar por emitente"
               >
                 <option value="todos">Todas</option>
@@ -334,8 +323,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
               value={keyFilterText}
               onChange={(e) => setKeyFilterText(e.target.value)}
               placeholder="Filtrar chaves…"
-              className="px-3 py-1.5 rounded text-xs no-drag w-56"
-              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}
+              className="px-3 py-1.5 rounded text-xs no-drag w-56 bg-[var(--bg-raised)] border border-[var(--border)]"
             />
             {selectedKeys.length > 0 && (
               <div className="flex items-center gap-3 ml-auto">
@@ -349,7 +337,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
                     if (selectedMatriz > 0) parts.push(`${selectedMatriz} Matriz`)
                     if (selectedFiliais > 0) parts.push(`${selectedFiliais} Filiais`)
                     return parts.length > 0 ? (
-                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <span className="text-xs text-[var(--text-muted)]">
                         {parts.join(' · ')}
                       </span>
                     ) : null
@@ -357,12 +345,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
                 <button
                   type="button"
                   onClick={downloadBatchXml}
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded text-xs font-semibold no-drag"
-                  style={{
-                    background: 'var(--teal-glow)',
-                    border: '1px solid var(--teal-dim)',
-                    color: 'var(--teal)',
-                  }}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 text-xs ${BUTTON_TEAL_GHOST_CLASS}`}
                 >
                   ↓ Baixar XMLs ({selectedKeys.length})
                 </button>
@@ -370,7 +353,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
             )}
           </div>
           {certificateCnpjNormalized && (
-            <div className="flex flex-wrap gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+            <div className="flex flex-wrap gap-2 text-xs text-[var(--text-muted)]">
               {matrizCount > 0 && <span>{matrizCount} Matriz</span>}
               {uniqueIssuerCnpjs
                 .filter((cnpj) => cnpj !== certificateCnpjNormalized)
@@ -386,18 +369,15 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
 
       <div className="flex-1 overflow-auto">
         {keys.length === 0 && !isSearching && (
-          <div
-            className="flex flex-col items-center justify-center h-full gap-3"
-            style={{ color: 'var(--text-muted)' }}
-          >
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-[var(--text-muted)]">
             <span className="text-4xl">◫</span>
             <span className="text-sm">Nenhuma busca realizada</span>
           </div>
         )}
         {keys.length > 0 && (
-          <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
+          <table className="w-full text-sm border-collapse">
             <thead>
-              <tr style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
+              <tr className="bg-[var(--bg-surface)] border-b border-[var(--border)]">
                 <th className="px-4 py-3 text-left w-10">
                   <input
                     type="checkbox"
@@ -407,21 +387,18 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
                   />
                 </th>
                 <th
-                  className="px-4 py-3 text-left text-xs uppercase tracking-widest w-12"
-                  style={{ color: 'var(--text-muted)' }}
+                  className="px-4 py-3 text-left text-xs uppercase tracking-widest w-12 text-[var(--text-muted)]"
                 >
                   #
                 </th>
                 <th
-                  className="px-4 py-3 text-left text-xs uppercase tracking-widest"
-                  style={{ color: 'var(--text-muted)' }}
+                  className="px-4 py-3 text-left text-xs uppercase tracking-widest text-[var(--text-muted)]"
                 >
                   Chave de Acesso
                 </th>
                 {certificateCnpjNormalized && (
                   <th
-                    className="px-4 py-3 text-left text-xs uppercase tracking-widest w-40"
-                    style={{ color: 'var(--text-muted)' }}
+                    className="px-4 py-3 text-left text-xs uppercase tracking-widest w-40 text-[var(--text-muted)]"
                   >
                     Emitente
                   </th>
@@ -435,15 +412,14 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
                 return (
                   <tr
                     key={item.chave}
-                    className="transition-colors cursor-pointer"
-                    style={{
-                      borderBottom: '1px solid var(--border)',
-                      background: item.selecionada
-                        ? 'var(--teal-glow)'
+                    className={[
+                      'transition-colors cursor-pointer border-b border-[var(--border)]',
+                      item.selecionada
+                        ? 'bg-[var(--teal-glow)]'
                         : index % 2 === 0
-                          ? 'transparent'
-                          : 'var(--bg-surface)',
-                    }}
+                          ? 'bg-transparent'
+                          : 'bg-[var(--bg-surface)]',
+                    ].join(' ')}
                     onClick={() => toggleKeySelected(item.chave)}
                   >
                     <td className="px-4 py-2.5">
@@ -455,8 +431,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
                       />
                     </td>
                     <td
-                      className="px-4 py-2.5 tabular-nums"
-                      style={{ color: 'var(--text-muted)', fontSize: '11px' }}
+                      className="px-4 py-2.5 tabular-nums text-[11px] text-[var(--text-muted)]"
                     >
                       {index + 1}
                     </td>

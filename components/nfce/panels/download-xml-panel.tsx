@@ -7,6 +7,7 @@ import { TAMANHO_CHAVE_ACESSO } from '@/lib/nfce-format'
 import type { CertificateUiState, ToastVariant } from '@/types/nfce-app'
 import { CertificatePasswordWarning } from '@/components/nfce/certificate-password-warning'
 import { Badge } from '@/components/nfce/ui/badge'
+import { BUTTON_PRIMARY_CLASS, BUTTON_SUBTLE_CLASS, BUTTON_TEAL_GHOST_CLASS, SURFACE_CARD_CLASS } from '@/components/nfce/ui/classes'
 import { Spinner } from '@/components/nfce/ui/spinner'
 
 interface DownloadXmlResult {
@@ -74,8 +75,8 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
 
   return (
     <div className="fade-in flex flex-col h-full">
-      <div className="p-6 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
-        <h2 className="text-xl font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
+      <div className="p-6 pb-4 border-b border-[var(--border)]">
+        <h2 className="text-xl font-semibold mb-4 text-[var(--text-primary)]">
           Download de XML
         </h2>
 
@@ -90,8 +91,7 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
             onChange={(e) => setAccessKeyInput(e.target.value)}
             placeholder="Chave de acesso (44 dígitos)"
             maxLength={44}
-            className="flex-1 px-3 py-2.5 rounded text-sm font-mono no-drag"
-            style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}
+            className="flex-1 px-3 py-2.5 rounded text-sm font-mono no-drag bg-[var(--bg-raised)] border border-[var(--border)]"
             onKeyDown={(e) => e.key === 'Enter' && !isLoading && downloadXml()}
             aria-label="Chave de acesso da NFC-e"
           />
@@ -99,11 +99,12 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
             type="button"
             onClick={downloadXml}
             disabled={isLoading}
-            className="flex items-center gap-2 px-5 py-2.5 rounded text-sm font-semibold no-drag"
-            style={{
-              background: isLoading ? 'var(--bg-raised)' : 'var(--teal)',
-              color: isLoading ? 'var(--text-muted)' : 'var(--text-on-accent)',
-            }}
+            className={[
+              `flex items-center gap-2 px-5 py-2.5 text-sm ${BUTTON_PRIMARY_CLASS}`,
+              isLoading
+                ? 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
+                : '',
+            ].join(' ')}
           >
             {isLoading ? (
               <>
@@ -114,7 +115,7 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
             )}
           </button>
         </div>
-        <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+        <p className="mt-2 text-xs text-[var(--text-muted)]">
           Cole a chave de acesso de 44 dígitos ou copie da tela Listagem. Pressione Enter para baixar.
         </p>
       </div>
@@ -122,8 +123,7 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
       <div className="flex-1 overflow-auto p-6">
         {!downloadResult && !isLoading && (
           <div
-            className="flex flex-col items-center justify-center h-full gap-3"
-            style={{ color: 'var(--text-muted)' }}
+            className="flex flex-col items-center justify-center h-full gap-3 text-[var(--text-muted)]"
           >
             <span className="text-4xl">⬡</span>
             <span className="text-sm">Informe uma chave para baixar o XML</span>
@@ -132,20 +132,19 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
         {downloadResult && (
           <div className="space-y-4 fade-in">
             <div
-              className="flex items-center gap-3 p-4 rounded"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+              className={`flex items-center gap-3 p-4 ${SURFACE_CARD_CLASS}`}
             >
               <Badge
                 tone={downloadResult.cStat === '200' ? 'green' : 'red'}
                 label={`cStat ${downloadResult.cStat ?? '?'}`}
               />
-              <span style={{ color: 'var(--text-secondary)' }}>{downloadResult.xMotivo}</span>
+              <span className="text-[var(--text-secondary)]">{downloadResult.xMotivo}</span>
             </div>
 
             {downloadResult.nfeProc && (
-              <div className="p-4 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+              <div className={`p-4 ${SURFACE_CARD_CLASS}`}>
                 <div className="flex items-center justify-between mb-3">
-                  <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                  <span className="font-medium text-[var(--text-primary)]">
                     NFC-e
                   </span>
                   <button
@@ -156,26 +155,21 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
                         `${downloadResult.nfeProc!.nProt}_nfce.xml`
                       )
                     }
-                    className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium no-drag"
-                    style={{
-                      background: 'var(--teal-glow)',
-                      border: '1px solid var(--teal-dim)',
-                      color: 'var(--teal)',
-                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium ${BUTTON_TEAL_GHOST_CLASS}`}
                   >
                     ↓ Salvar XML
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <span style={{ color: 'var(--text-muted)' }}>Protocolo</span>
-                    <p className="font-mono mt-0.5" style={{ color: 'var(--teal)' }}>
+                    <span className="text-[var(--text-muted)]">Protocolo</span>
+                    <p className="font-mono mt-0.5 text-[var(--teal)]">
                       {downloadResult.nfeProc.nProt || '–'}
                     </p>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--text-muted)' }}>Incluído em</span>
-                    <p className="font-mono mt-0.5" style={{ color: 'var(--text-primary)' }}>
+                    <span className="text-[var(--text-muted)]">Incluído em</span>
+                    <p className="font-mono mt-0.5 text-[var(--text-primary)]">
                       {downloadResult.nfeProc.dhInc || '–'}
                     </p>
                   </div>
@@ -185,33 +179,27 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
 
             {(downloadResult.eventos?.length ?? 0) > 0 && (
               <div>
-                <p className="text-xs uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-xs uppercase tracking-widest mb-2 text-[var(--text-muted)]">
                   Eventos ({downloadResult.eventos!.length})
                 </p>
                 <div className="space-y-2">
                   {downloadResult.eventos!.map((evento, index) => (
                     <div
                       key={evento.nProt || index}
-                      className="p-3 rounded flex items-center justify-between"
-                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+                      className={`p-3 flex items-center justify-between ${SURFACE_CARD_CLASS}`}
                     >
                       <div className="text-sm">
-                        <span className="font-mono" style={{ color: 'var(--amber)' }}>
+                        <span className="font-mono text-[var(--amber)]">
                           {evento.nProt || '–'}
                         </span>
-                        <span className="ml-3" style={{ color: 'var(--text-secondary)' }}>
+                        <span className="ml-3 text-[var(--text-secondary)]">
                           {evento.dhInc || '–'}
                         </span>
                       </div>
                       <button
                         type="button"
                         onClick={() => saveXmlFile(evento.eventoXml, `${evento.nProt}_evento.xml`)}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded text-xs no-drag"
-                        style={{
-                          background: 'var(--bg-raised)',
-                          border: '1px solid var(--border)',
-                          color: 'var(--text-secondary)',
-                        }}
+                        className={`flex items-center gap-1 px-2.5 py-1 text-xs ${BUTTON_SUBTLE_CLASS}`}
                       >
                         ↓ XML
                       </button>

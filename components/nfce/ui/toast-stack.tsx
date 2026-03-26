@@ -13,9 +13,9 @@ const ICON_BY_VARIANT: Record<ToastVariant, string> = {
 }
 
 const ICON_COLOR: Record<ToastVariant, string> = {
-  ok: 'var(--green)',
-  erro: 'var(--red)',
-  info: 'var(--teal)',
+  ok: 'text-[var(--green)]',
+  erro: 'text-[var(--red)]',
+  info: 'text-[var(--teal)]',
 }
 
 interface ToastStackProps {
@@ -34,18 +34,13 @@ export function ToastStack({ toasts, onDismiss }: ToastStackProps) {
         <div
           key={item.id}
           role="alert"
-          className={`flex items-start gap-3 px-4 py-3 rounded shadow-xl min-w-72 max-w-sm fade-in cursor-pointer border ${BORDER_BY_VARIANT[item.tipo]}`}
-          style={{
-            borderColor: 'var(--border)',
-            borderLeftWidth: '4px',
-            background: 'var(--bg-surface)',
-          }}
+          className={`flex items-start gap-3 px-4 py-3 rounded shadow-xl min-w-72 max-w-sm fade-in cursor-pointer border ${BORDER_BY_VARIANT[item.tipo]} bg-[var(--bg-surface)] border-[var(--border)] border-l-[4px]`}
           onClick={() => onDismiss(item.id)}
         >
-          <span className="mt-0.5 text-sm shrink-0" style={{ color: ICON_COLOR[item.tipo] }}>
+          <span className={`mt-0.5 text-sm shrink-0 ${ICON_COLOR[item.tipo]}`}>
             {ICON_BY_VARIANT[item.tipo]}
           </span>
-          <span className="text-sm break-words" style={{ color: 'var(--text-primary)' }}>
+          <span className="text-sm break-words text-[var(--text-primary)]">
             {item.msg}
           </span>
         </div>

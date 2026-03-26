@@ -125,15 +125,15 @@ export default function Home() {
     (!certificateState.origemStore && Boolean(certificateState.pfxPath))
 
   return (
-    <div className="flex h-screen" style={{ background: 'var(--bg-deep)', userSelect: 'none' }}>
-      <aside className="flex flex-col w-56 shrink-0" style={{ background: 'var(--bg-base)', borderRight: '1px solid var(--border)' }}>
+    <div className="flex h-screen select-none bg-[var(--bg-deep)]">
+      <aside className="flex flex-col w-56 shrink-0 bg-[var(--bg-base)] border-r border-[var(--border)]">
         <div className="drag-region h-8 shrink-0" />
         <div className="px-5 pb-6">
           <div className="flex items-center gap-2.5 mb-1">
-            <span className="text-2xl" style={{ color: 'var(--teal)' }}>
+            <span className="text-2xl text-[var(--teal)]">
               ⬡
             </span>
-            <span className="font-semibold text-sm leading-tight" style={{ color: 'var(--text-primary)' }}>
+            <span className="font-semibold text-sm leading-tight text-[var(--text-primary)]">
               Escrituração
               <br />
               NFC-e
@@ -141,24 +141,25 @@ export default function Home() {
           </div>
           <div className="mt-2 flex items-center gap-1.5">
             <span
-              className="inline-block w-1.5 h-1.5 rounded-full transition-colors"
-              style={{ background: certificateReady ? 'var(--green)' : 'var(--text-muted)' }}
+              className={[
+                'inline-block w-1.5 h-1.5 rounded-full transition-colors',
+                certificateReady ? 'bg-[var(--green)]' : 'bg-[var(--text-muted)]',
+              ].join(' ')}
             />
-            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            <span className="text-xs text-[var(--text-muted)]">
               {certificateReady ? certificateState.ambiente : 'sem certificado'}
             </span>
           </div>
 
           <div
-            className="mt-3 max-w-full rounded px-2.5 py-2 transition-[border-color,background-color] duration-150"
-            style={{
-              border: hasSelectedCertificate
-                ? '1px solid var(--teal)'
-                : '1px dashed var(--text-muted)',
-              background: hasSelectedCertificate ? 'var(--teal-glow)' : 'transparent',
-            }}
+            className={[
+              'mt-3 max-w-full rounded px-2.5 py-2 transition-colors duration-150',
+              hasSelectedCertificate
+                ? 'border border-[var(--teal)] bg-[var(--teal-glow)]'
+                : 'border border-dashed border-[var(--text-muted)] bg-transparent',
+            ].join(' ')}
           >
-            <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-[10px] uppercase tracking-wider mb-1 text-[var(--text-muted)]">
               Certificado
             </p>
             {(() => {
@@ -166,7 +167,7 @@ export default function Home() {
               const hasPfxFile = !certificateState.origemStore && Boolean(certificateState.pfxPath)
               if (!hasStoreCert && !hasPfxFile) {
                 return (
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <p className="text-xs text-[var(--text-muted)]">
                     Nenhum
                   </p>
                 )
@@ -186,14 +187,13 @@ export default function Home() {
               return (
                 <div className="min-w-0">
                   <p
-                    className="text-xs font-medium truncate leading-snug"
-                    style={{ color: 'var(--text-primary)' }}
+                    className="text-xs font-medium truncate leading-snug text-[var(--text-primary)]"
                     title={tituloLinha}
                   >
                     {nomeExibicao}
                   </p>
                   {cnpjDigits && cnpjDigits.length === 14 && (
-                    <p className="text-xs font-mono mt-1 leading-tight break-all" style={{ color: 'var(--text-secondary)' }}>
+                    <p className="text-xs font-mono mt-1 leading-tight break-all text-[var(--text-secondary)]">
                       {formatCnpjForDisplay(cnpjDigits)}
                     </p>
                   )}
@@ -209,13 +209,13 @@ export default function Home() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className="flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-all text-left no-drag"
+              className={[
+                'flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-all text-left no-drag',
+                activeTab === tab.id
+                  ? 'bg-[var(--teal-glow)] text-[var(--teal)] font-medium'
+                  : 'bg-transparent text-[var(--text-secondary)] font-normal',
+              ].join(' ')}
               aria-current={activeTab === tab.id ? 'page' : undefined}
-              style={{
-                background: activeTab === tab.id ? 'var(--teal-glow)' : 'transparent',
-                color: activeTab === tab.id ? 'var(--teal)' : 'var(--text-secondary)',
-                fontWeight: activeTab === tab.id ? 500 : 400,
-              }}
             >
               <span className="w-5 text-center text-base">{tab.icon}</span>
               {tab.label}
@@ -223,24 +223,24 @@ export default function Home() {
           ))}
         </nav>
 
-        <div className="px-5 py-4" style={{ borderTop: '1px solid var(--border)' }}>
+        <div className="px-5 py-4 border-t border-[var(--border)]">
           <ThemeSelector />
           {appVersion && (
-            <p className="text-xs font-mono mb-1" style={{ color: 'var(--teal)' }} title="Versão do aplicativo">
+            <p className="text-xs font-mono mb-1 text-[var(--teal)]" title="Versão do aplicativo">
               App v{appVersion}
             </p>
           )}
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-xs text-[var(--text-muted)]">
             SAE-NFC-e v1.0.0
           </p>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-xs text-[var(--text-muted)]">
             SEFAZ-SP · NT 2026
           </p>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-hidden flex flex-col" style={{ background: 'var(--bg-base)' }}>
-        <div className="drag-region h-8 shrink-0" style={{ background: 'var(--bg-base)' }} />
+      <main className="flex-1 overflow-hidden flex flex-col bg-[var(--bg-base)]">
+        <div className="drag-region h-8 shrink-0 bg-[var(--bg-base)]" />
         <div className="flex-1 overflow-hidden">
           {activeTab === 'config' && (
             <div className="h-full overflow-auto">

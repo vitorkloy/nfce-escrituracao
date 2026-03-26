@@ -4,8 +4,7 @@
 export function CertificatePasswordWarning({ context }: { context: 'listagem' | 'download' }) {
   return (
     <div
-      className="mb-4 px-4 py-3 rounded flex items-center gap-3"
-      style={{ background: 'var(--amber)', color: '#000', border: '1px solid var(--amber)' }}
+      className="mb-4 px-4 py-3 rounded flex items-center gap-3 bg-[var(--amber)] text-black border border-[var(--amber)]"
       role="alert"
     >
       <span className="text-lg">⚠</span>

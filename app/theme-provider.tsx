@@ -1,13 +1,14 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
-  useState,
 } from 'react'
+import { ThemeProvider as NextThemesProvider, useTheme as useNextTheme } from 'next-themes'
 
 export type ThemePreference = 'light' | 'dark' | 'system'
 
@@ -24,70 +25,76 @@ function applyDomTheme(pref: ThemePreference) {
   }
 }
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemePreference>('system')
+function ThemeBridge({ children }: { children: ReactNode }) {
+  const {
+    theme: nextTheme,
+    setTheme: setNextTheme,
+  } = useNextTheme()
 
-  const setTheme = useCallback(async (t: ThemePreference) => {
-    setThemeState(t)
-    applyDomTheme(t)
-    if (typeof window !== 'undefined' && window.electron?.ui) {
-      await window.electron.ui.setTheme(t)
-    } else if (typeof window !== 'undefined') {
+  const themePref = (nextTheme ?? 'system') as ThemePreference
+
+  const setTheme = useCallback(
+    async (t: ThemePreference) => {
+      applyDomTheme(t)
+      if (typeof window !== 'undefined' && window.electron?.ui) {
+        await window.electron.ui.setTheme(t)
+      }
+      setNextTheme(t)
       try {
         localStorage.setItem(STORAGE_KEY, t)
       } catch {
         /* ignore */
       }
-    }
-  }, [])
+    },
+    [setNextTheme]
+  )
 
+  // Aplica o data-theme para manter compatibilidade com `globals.css` (tokens atuais).
   useEffect(() => {
+    applyDomTheme(themePref)
+  }, [themePref])
+
+  // Inicializa o tema a partir do Electron (quando disponível).
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.electron?.ui) return
     let cancelled = false
-    async function init() {
-      let t: ThemePreference = 'system'
-      if (typeof window !== 'undefined' && window.electron?.ui) {
-        try {
-          t = await window.electron.ui.getTheme()
-        } catch {
-          /* mantém system */
-        }
-      } else if (typeof window !== 'undefined') {
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY)
-          if (raw === 'light' || raw === 'dark' || raw === 'system') t = raw
-        } catch {
-          /* ignore */
-        }
-      }
-      if (!cancelled) {
-        setThemeState(t)
+    window.electron.ui
+      .getTheme()
+      .then((t) => {
+        if (cancelled) return
         applyDomTheme(t)
-      }
-    }
-    init()
+        setNextTheme(t)
+      })
+      .catch(() => {
+        /* mantém padrão */
+      })
+
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [setNextTheme])
 
-  /* Quando o usuário muda o tema do SO e a preferência é "sistema", o CSS já reage via media queries. */
-  useEffect(() => {
-    if (theme !== 'system' || typeof window === 'undefined') return
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const noop = () => {
-      /* força repaint se algum browser não atualizar variáveis sozinho */
-      document.documentElement.dataset.theme = 'system'
-    }
-    mq.addEventListener('change', noop)
-    return () => mq.removeEventListener('change', noop)
-  }, [theme])
+  const value = useMemo(() => ({ theme: themePref, setTheme }), [themePref, setTheme])
 
-  const value = useMemo(() => ({ theme, setTheme }), [theme, setTheme])
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  // Evita um primeiro paint com `data-theme` indefinido.
+  if (typeof document !== 'undefined' && !document.documentElement.dataset.theme) {
+    document.documentElement.dataset.theme = 'system'
+  }
 
   return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
+    <NextThemesProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      storageKey={STORAGE_KEY}
+      disableTransitionOnChange
+    >
+      <ThemeBridge>{children}</ThemeBridge>
+    </NextThemesProvider>
   )
 }
 

@@ -67,7 +67,7 @@ export function CertificateStorePicker({ onSelect }: CertificateStorePickerProps
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-3 py-8 justify-center" style={{ color: 'var(--text-muted)' }}>
+      <div className="flex items-center gap-3 py-8 justify-center text-[var(--text-muted)]">
         <Spinner /> Lendo repositório de certificados…
       </div>
     )
@@ -76,12 +76,11 @@ export function CertificateStorePicker({ onSelect }: CertificateStorePickerProps
   if (errorMessage) {
     return (
       <div
-        className="py-4 px-4 rounded text-sm"
-        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--red)' }}
+        className="py-4 px-4 rounded text-sm bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--red)]"
       >
         <p className="font-medium mb-1">Não foi possível listar os certificados</p>
-        <p style={{ color: 'var(--text-secondary)' }}>{errorMessage}</p>
-        <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-[var(--text-secondary)]">{errorMessage}</p>
+        <p className="mt-2 text-xs text-[var(--text-muted)]">
           Use o modo "Arquivo .pfx" como alternativa.
         </p>
       </div>
@@ -90,7 +89,7 @@ export function CertificateStorePicker({ onSelect }: CertificateStorePickerProps
 
   if (certificates.length === 0) {
     return (
-      <div className="py-8 text-sm text-center" style={{ color: 'var(--text-muted)' }}>
+      <div className="py-8 text-sm text-center text-[var(--text-muted)]">
         <p>Nenhum certificado com chave privada encontrado.</p>
         <p className="mt-1 text-xs">Verifique em: certmgr.msc → Pessoal → Certificados</p>
       </div>
@@ -107,8 +106,7 @@ export function CertificateStorePicker({ onSelect }: CertificateStorePickerProps
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
           placeholder="Filtrar por nome, CNPJ ou thumbprint…"
-          className="w-full px-3 py-2 rounded text-sm no-drag"
-          style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}
+          className="w-full px-3 py-2 rounded text-sm no-drag bg-[var(--bg-raised)] border border-[var(--border)]"
           aria-label="Filtrar certificados"
         />
       </div>
@@ -121,45 +119,38 @@ export function CertificateStorePicker({ onSelect }: CertificateStorePickerProps
             onClick={() => onSelect(cert)}
             disabled={cert.expirado}
             title={cert.expirado ? 'Certificado expirado — não pode ser usado' : undefined}
-            className="w-full text-left px-4 py-3 rounded transition-all no-drag"
-            style={{
-              background: 'var(--bg-raised)',
-              border: '1px solid var(--border)',
-              opacity: cert.expirado ? 0.45 : 1,
-              cursor: cert.expirado ? 'not-allowed' : 'pointer',
-            }}
-            onMouseEnter={(e) => {
-              if (!cert.expirado) e.currentTarget.style.borderColor = 'var(--teal-dim)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--border)'
-            }}
+            className={[
+              'w-full text-left px-4 py-3 rounded transition-all no-drag border',
+              'bg-[var(--bg-raised)] border-[var(--border)]',
+              cert.expirado ? 'opacity-45 cursor-not-allowed' : 'opacity-100 cursor-pointer hover:border-[var(--teal-dim)]',
+            ].join(' ')}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium text-sm truncate" style={{ color: 'var(--text-primary)' }}>
+                  <span className="font-medium text-sm truncate text-[var(--text-primary)]">
                     {cert.nome}
                   </span>
                   {cert.expirado && <Badge tone="red" label="Expirado" />}
                 </div>
                 {cert.cnpj && (
-                  <div className="text-xs font-mono mb-1" style={{ color: 'var(--teal)' }}>
+                  <div className="text-xs font-mono mb-1 text-[var(--teal)]">
                     CNPJ {formatCnpjForDisplay(cert.cnpj)}
                   </div>
                 )}
-                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                <div className="text-xs text-[var(--text-muted)]">
                   Válido até {formatDateOnlyPtBr(cert.validade)}
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                <div className="text-xs font-mono text-[var(--text-muted)]">
                   {cert.thumbprint.substring(0, 8)}…
                 </div>
                 {!cert.expirado && (
                   <div
-                    className="mt-1.5 text-xs px-2 py-0.5 rounded"
-                    style={{ background: 'var(--teal-glow)', color: 'var(--teal)' }}
+                    className={[
+                      'mt-1.5 text-xs px-2 py-0.5 rounded bg-[var(--teal-glow)] text-[var(--teal)]',
+                    ].join(' ')}
                   >
                     Selecionar →
                   </div>
@@ -170,10 +161,10 @@ export function CertificateStorePicker({ onSelect }: CertificateStorePickerProps
         ))}
       </div>
 
-      <p className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+      <p className="mt-3 text-xs text-[var(--text-muted)]">
         {certificates.length} certificado(s) encontrado(s).{' '}
         {expiredCount > 0 && (
-          <span style={{ color: 'var(--red)' }}>
+          <span className="text-[var(--red)]">
             {expiredCount} expirado(s) — não disponível para seleção.
           </span>
         )}

@@ -11,6 +11,7 @@ import {
 } from '@/lib/nfce-format'
 import type { CertificateSourceMode, CertificateUiState, ToastVariant } from '@/types/nfce-app'
 import { CertificateStorePicker } from '@/components/nfce/certificate-store-picker'
+import { BUTTON_PRIMARY_CLASS, BUTTON_SUBTLE_CLASS, BUTTON_TEAL_GHOST_CLASS, INPUT_BASE_CLASS, SURFACE_CARD_CLASS } from '@/components/nfce/ui/classes'
 import { Spinner } from '@/components/nfce/ui/spinner'
 
 const CERT_SOURCE_MODES: CertificateSourceMode[] = ['store', 'arquivo']
@@ -152,28 +153,27 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
 
   return (
     <div className="fade-in p-8 max-w-xl">
-      <h2 className="text-xl font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+      <h2 className="text-xl font-semibold mb-1 text-[var(--text-primary)]">
         Certificado Digital
       </h2>
-      <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
+      <p className="text-sm mb-6 text-[var(--text-secondary)]">
         Use seu e-CNPJ para autenticar as consultas à SEFAZ-SP. A senha nunca é armazenada.
       </p>
 
       <div
-        className="flex gap-1 p-1 rounded mb-6 no-drag"
-        style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}
+        className={`flex gap-1 p-1 mb-6 ${INPUT_BASE_CLASS}`}
       >
         {CERT_SOURCE_MODES.map((mode) => (
           <button
             key={mode}
             type="button"
             onClick={() => setSourceMode(mode)}
-            className="flex-1 py-2 rounded text-sm font-medium transition-all"
-            style={{
-              background: sourceMode === mode ? 'var(--bg-surface)' : 'transparent',
-              color: sourceMode === mode ? 'var(--text-primary)' : 'var(--text-muted)',
-              border: sourceMode === mode ? '1px solid var(--border-hi)' : '1px solid transparent',
-            }}
+            className={[
+              'flex-1 py-2 rounded text-sm font-medium transition-all border',
+              sourceMode === mode
+                ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] border-[var(--border-hi)]'
+                : 'bg-transparent text-[var(--text-muted)] border-transparent',
+            ].join(' ')}
           >
             {mode === 'store' ? '🔑 Repositório do sistema' : '📁 Arquivo .pfx'}
           </button>
@@ -184,20 +184,19 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
         <div className="mb-5">
           {selectedStoreCert ? (
             <div
-              className="p-4 rounded mb-3"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--teal-dim)' }}
+              className={`p-4 mb-3 ${SURFACE_CARD_CLASS} border-[var(--teal-dim)]`}
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="font-medium text-sm mb-1" style={{ color: 'var(--text-primary)' }}>
+                  <div className="font-medium text-sm mb-1 text-[var(--text-primary)]">
                     {selectedStoreCert.nome}
                   </div>
                   {selectedStoreCert.cnpj && (
-                    <div className="text-xs font-mono mb-1" style={{ color: 'var(--teal)' }}>
+                    <div className="text-xs font-mono mb-1 text-[var(--teal)]">
                       CNPJ {formatCnpjForDisplay(selectedStoreCert.cnpj)}
                     </div>
                   )}
-                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <div className="text-xs text-[var(--text-muted)]">
                     Válido até {formatDateOnlyPtBr(selectedStoreCert.validade)} ·{' '}
                     {selectedStoreCert.thumbprint.substring(0, 16)}…
                   </div>
@@ -213,8 +212,7 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
                       certificadoCnpj: undefined,
                     })
                   }}
-                  className="text-xs no-drag px-2 py-1 rounded"
-                  style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+                  className={`text-xs px-2 py-1 ${BUTTON_SUBTLE_CLASS} text-[var(--text-muted)]`}
                 >
                   Trocar
                 </button>
@@ -229,19 +227,16 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
       {sourceMode === 'arquivo' && (
         <div className="mb-5">
           <label
-            className="block text-xs font-medium mb-2 uppercase tracking-widest"
-            style={{ color: 'var(--text-muted)' }}
+            className="block text-xs font-medium mb-2 uppercase tracking-widest text-[var(--text-muted)]"
           >
             Arquivo .pfx / .p12
           </label>
           <div className="flex gap-2">
             <div
-              className="flex-1 flex items-center px-3 py-2.5 rounded text-sm truncate cursor-pointer"
-              style={{
-                background: 'var(--bg-raised)',
-                border: '1px solid var(--border)',
-                color: certificateState.pfxPath ? 'var(--text-primary)' : 'var(--text-muted)',
-              }}
+              className={[
+                `flex-1 flex items-center px-3 py-2.5 text-sm truncate cursor-pointer ${INPUT_BASE_CLASS}`,
+                certificateState.pfxPath ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]',
+              ].join(' ')}
               onClick={pickPfxFile}
             >
               {certificateState.pfxPath || 'Clique para selecionar…'}
@@ -249,8 +244,7 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
             <button
               type="button"
               onClick={pickPfxFile}
-              className="px-4 py-2.5 rounded text-sm font-medium no-drag"
-              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--teal)' }}
+              className={`px-4 py-2.5 text-sm font-medium ${BUTTON_SUBTLE_CLASS} text-[var(--teal)]`}
             >
               Procurar
             </button>
@@ -260,16 +254,15 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
 
       {sourceMode === 'store' ? (
         <div
-          className="mb-5 px-4 py-3 rounded flex items-center justify-between gap-3"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+          className={`mb-5 px-4 py-3 flex items-center justify-between gap-3 ${SURFACE_CARD_CLASS}`}
         >
           <div className="flex items-center gap-3">
             <span className="text-lg">🔑</span>
             <div>
-              <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
+              <p className="font-medium text-sm text-[var(--text-primary)]">
                 Repositório do sistema
               </p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-xs mt-0.5 text-[var(--text-muted)]">
                 Senha não necessária — o certificado é acessado diretamente pelo Windows.
               </p>
             </div>
@@ -279,8 +272,7 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
               type="button"
               onClick={verifyCertificate}
               disabled={isVerifying}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium no-drag shrink-0"
-              style={{ background: 'var(--teal-glow)', border: '1px solid var(--teal-dim)', color: 'var(--teal)' }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium shrink-0 ${BUTTON_TEAL_GHOST_CLASS}`}
             >
               {isVerifying ? <Spinner size={3} /> : 'Verificar'}
             </button>
@@ -289,8 +281,7 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
       ) : (
         <div className="mb-5">
           <label
-            className="block text-xs font-medium mb-2 uppercase tracking-widest"
-            style={{ color: 'var(--text-muted)' }}
+            className="block text-xs font-medium mb-2 uppercase tracking-widest text-[var(--text-muted)]"
           >
             Senha do Certificado
           </label>
@@ -304,19 +295,17 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
                   setPasswordCheckOk(null)
                 }}
                 placeholder="••••••••"
-                className="w-full px-3 py-2.5 pr-10 rounded text-sm no-drag"
-                style={{
-                  background: 'var(--bg-raised)',
-                  border: `1px solid ${passwordCheckOk === false ? 'var(--red)' : 'var(--border)'}`,
-                }}
+                className={[
+                  `w-full px-3 py-2.5 pr-10 text-sm ${INPUT_BASE_CLASS}`,
+                  passwordCheckOk === false ? 'border-[var(--red)]' : 'border-[var(--border)]',
+                ].join(' ')}
                 autoComplete="new-password"
                 aria-label="Senha do certificado"
               />
               <button
                 type="button"
                 onClick={() => setPasswordVisible((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded text-xs no-drag"
-                style={{ color: 'var(--text-muted)' }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded text-xs no-drag text-[var(--text-muted)]"
                 title={passwordVisible ? 'Ocultar senha' : 'Mostrar senha'}
                 aria-label={passwordVisible ? 'Ocultar senha' : 'Mostrar senha'}
               >
@@ -327,27 +316,27 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
               type="button"
               onClick={verifyCertificate}
               disabled={isVerifying || !certificateState.senha || !certificateReady}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded text-sm font-medium no-drag shrink-0"
-              style={{
-                background: isVerifying ? 'var(--bg-raised)' : 'var(--teal-glow)',
-                border: '1px solid var(--teal-dim)',
-                color: isVerifying ? 'var(--text-muted)' : 'var(--teal)',
-              }}
+              className={[
+                `flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium shrink-0 border border-[var(--teal-dim)]`,
+                isVerifying
+                  ? 'bg-[var(--bg-raised)] text-[var(--text-muted)]'
+                  : 'bg-[var(--teal-glow)] text-[var(--teal)]',
+              ].join(' ')}
             >
               {isVerifying ? <Spinner size={3} /> : 'Verificar'}
             </button>
           </div>
           <div className="mt-1.5 flex items-center gap-2">
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-xs text-[var(--text-muted)]">
               A senha é usada apenas em memória e não é salva.
             </p>
             {passwordCheckOk === true && (
-              <span className="text-xs" style={{ color: 'var(--green)' }}>
+              <span className="text-xs text-[var(--green)]">
                 ✓ Senha correta
               </span>
             )}
             {passwordCheckOk === false && (
-              <span className="text-xs" style={{ color: 'var(--red)' }}>
+              <span className="text-xs text-[var(--red)]">
                 ✕ Senha incorreta
               </span>
             )}
@@ -357,8 +346,7 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
 
       <div className="mb-8">
         <label
-          className="block text-xs font-medium mb-2 uppercase tracking-widest"
-          style={{ color: 'var(--text-muted)' }}
+          className="block text-xs font-medium mb-2 uppercase tracking-widest text-[var(--text-muted)]"
         >
           Ambiente
         </label>
@@ -368,12 +356,12 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
               key={ambiente}
               type="button"
               onClick={() => onCertificateChange({ ...certificateState, ambiente })}
-              className="flex-1 py-2.5 rounded text-sm font-medium transition-all no-drag"
-              style={{
-                background: certificateState.ambiente === ambiente ? 'var(--teal-glow)' : 'var(--bg-raised)',
-                border: `1px solid ${certificateState.ambiente === ambiente ? 'var(--teal-dim)' : 'var(--border)'}`,
-                color: certificateState.ambiente === ambiente ? 'var(--teal)' : 'var(--text-secondary)',
-              }}
+              className={[
+                'flex-1 py-2.5 rounded text-sm font-medium transition-all no-drag border',
+                certificateState.ambiente === ambiente
+                  ? 'bg-[var(--teal-glow)] border-[var(--teal-dim)] text-[var(--teal)]'
+                  : 'bg-[var(--bg-raised)] border-[var(--border)] text-[var(--text-secondary)]',
+              ].join(' ')}
             >
               {ambiente === 'homologacao' ? '🔬 Homologação' : '🏭 Produção'}
             </button>
@@ -386,11 +374,12 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
           type="button"
           onClick={saveConfiguration}
           disabled={!certificateReady}
-          className="flex-1 py-2.5 rounded text-sm font-semibold transition-all no-drag"
-          style={{
-            background: certificateReady ? 'var(--teal)' : 'var(--bg-raised)',
-            color: certificateReady ? '#000' : 'var(--text-muted)',
-          }}
+          className={[
+            `flex-1 py-2.5 text-sm font-semibold transition-all ${BUTTON_PRIMARY_CLASS}`,
+            certificateReady
+              ? ''
+              : 'bg-[var(--bg-raised)] text-[var(--text-muted)]',
+          ].join(' ')}
         >
           Salvar configuração
         </button>
