@@ -6,6 +6,7 @@ import { ThemeSelector } from '@/components/nfce/theme-selector'
 import { ConfigPanel } from '@/components/nfce/panels/config-panel'
 import { KeyListPanel } from '@/components/nfce/panels/key-list-panel'
 import { DownloadXmlPanel } from '@/components/nfce/panels/download-xml-panel'
+import { RelatorioPanel } from '@/components/nfce/panels/relatorio-panel'
 import { LoadingOverlay } from '@/components/nfce/ui/loading-overlay'
 import { ToastStack } from '@/components/nfce/ui/toast-stack'
 import {
@@ -22,6 +23,7 @@ const MAIN_TABS: { id: AppTab; label: string; icon: string }[] = [
   { id: 'config', label: 'Certificado', icon: '⚙' },
   { id: 'listagem', label: 'Listagem', icon: '≡' },
   { id: 'download', label: 'Download XML', icon: '↓' },
+  { id: 'relatorio', label: 'Relatório', icon: '≋' },
 ]
 
 export default function Home() {
@@ -263,6 +265,11 @@ export default function Home() {
           {activeTab === 'download' && (
             <div className="h-full flex flex-col overflow-hidden">
               <DownloadXmlPanel certificateState={certificateState} showToast={showToast} />
+            </div>
+          )}
+          {activeTab === 'relatorio' && (
+            <div className="h-full flex flex-col overflow-hidden">
+              <RelatorioPanel showToast={showToast} />
             </div>
           )}
         </div>

@@ -78,6 +78,27 @@ let mainWindow: BrowserWindow | null = null
 let appEstaOcupada = false
 let ignorarConfirmacaoFechamento = false
 
+type RelatorioModo = 'agora' | 'depois' | 'nenhum'
+
+function escapeCsvCell(value: unknown): string {
+  const s = value == null ? '' : String(value)
+  // Mantém Excel feliz: aspas e separadores
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+  return s
+}
+
+function gerarComparativoCsv(
+  linhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string }>
+): string {
+  const headers = ['Número do documento', 'Data de emissão', 'Valor do cupom']
+  const rows = linhas.map((l) => [
+    escapeCsvCell(l.nNF ?? ''),
+    escapeCsvCell(l.dhEmi ?? ''),
+    escapeCsvCell(l.vNF ?? ''),
+  ])
+  return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+}
+
 /** Ícone da janela / taskbar: empacotado usa extraResources; em dev usa public/. */
 function resolveWindowIcon(): string | undefined {
   if (process.platform === 'darwin') {
@@ -779,11 +800,14 @@ ipcMain.handle(
     _e,
     config: ConfigCert & { thumbprint?: string },
     chaves: string[],
-    pastaSaida: string
+    pastaSaida: string,
+    relatorioModo: RelatorioModo = 'nenhum'
   ) => {
     let pfxPath  = ''
     let tmpCriado = false
     const resultados: { chave: string; ok: boolean; erro?: string }[] = []
+    const relatorioLinhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string }> = []
+    let relatorioFalhas = 0
 
     // Valida a pasta de saída antes de começar
     try {
@@ -832,6 +856,17 @@ ipcMain.handle(
               } catch (e) {
                 throw new Error(`Falha ao salvar XML da NFC-e: ${mensagemErro(e)}`)
               }
+
+              if (resultado.nfeProc.nNF && resultado.nfeProc.vNF) {
+                relatorioLinhas.push({
+                  chave,
+                  dhEmi: resultado.nfeProc.dhEmi,
+                  nNF: resultado.nfeProc.nNF,
+                  vNF: resultado.nfeProc.vNF,
+                })
+              } else {
+                relatorioFalhas++
+              }
             }
 
             for (const ev of resultado.eventos) {
@@ -877,6 +912,17 @@ ipcMain.handle(
       if (falhas.length > 0) {
         console.warn(`[Lote] Concluído: ${chaves.length - falhas.length} OK, ${falhas.length} falha(s)`)
       }
+      if (relatorioModo === 'agora') {
+        const csv = gerarComparativoCsv(relatorioLinhas)
+        const arquivo = path.join(pastaSaida, 'comparativo_nfce.csv')
+        fs.writeFileSync(arquivo, csv, 'utf-8')
+        return {
+          ok: true,
+          resultados,
+          relatorio: { arquivo: 'comparativo_nfce.csv', gerados: relatorioLinhas.length, falhas: relatorioFalhas },
+        }
+      }
+
       return { ok: true, resultados }
 
     } catch (err: unknown) {
@@ -929,5 +975,88 @@ ipcMain.handle('fs:abrir-pasta', async (_e, caminho: string) => {
     await shell.openPath(caminho)
   } catch (err) {
     console.warn('[Main] Falha ao abrir pasta:', err)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// IPC — Relatório interno (CSV comparativo)
+// ---------------------------------------------------------------------------
+
+function extrairRelatorioDoXml(xmlStr: string): { dhEmi?: string; nNF?: string; vNF?: string } {
+  const nNF = xmlStr.match(/<nNF>([^<]+)<\/nNF>/)?.[1]?.trim()
+  const vNF = xmlStr.match(/<vNF>([^<]+)<\/vNF>/)?.[1]?.trim()
+  const dhEmi = xmlStr.match(/<dhEmi>([^<]+)<\/dhEmi>/)?.[1]?.trim()
+  return { dhEmi, nNF, vNF }
+}
+
+ipcMain.handle('relatorio:comparativo-csv', async (_e, pastaSaida: string) => {
+  try {
+    if (!pastaSaida) throw new Error('Pasta de destino não informada.')
+    if (!fs.existsSync(pastaSaida)) throw new Error('Pasta de destino não encontrada.')
+
+    const entries = fs.readdirSync(pastaSaida)
+    const xmlArquivos = entries.filter((f) => /_nfce\.xml$/i.test(f))
+
+    const linhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string }> = []
+    let falhas = 0
+
+    for (const arquivo of xmlArquivos) {
+      const full = path.join(pastaSaida, arquivo)
+      let conteudo = ''
+      try {
+        conteudo = fs.readFileSync(full, 'utf-8')
+      } catch {
+        falhas++
+        continue
+      }
+
+      const { dhEmi, nNF, vNF } = extrairRelatorioDoXml(conteudo)
+      if (nNF && vNF) {
+        linhas.push({ chave: arquivo.replace(/_nfce\.xml$/i, ''), dhEmi, nNF, vNF })
+      } else {
+        falhas++
+      }
+    }
+
+    const csv = gerarComparativoCsv(linhas)
+    const destino = path.join(pastaSaida, 'comparativo_nfce.csv')
+    fs.writeFileSync(destino, csv, 'utf-8')
+
+    return {
+      ok: true,
+      arquivo: 'comparativo_nfce.csv',
+      gerados: linhas.length,
+      falhas,
+    }
+  } catch (err: unknown) {
+    return {
+      ok: false,
+      xMotivo: mensagemErro(err),
+    }
+  }
+})
+
+ipcMain.handle('relatorio:listar-xmls', async (_e, pastaSaida: string) => {
+  try {
+    if (!pastaSaida) throw new Error('Pasta de destino não informada.')
+    if (!fs.existsSync(pastaSaida)) throw new Error('Pasta de destino não encontrada.')
+
+    const entries = fs.readdirSync(pastaSaida)
+    const xmlArquivos = entries
+      .filter((f) => /_nfce\.xml$/i.test(f))
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+
+    return {
+      ok: true,
+      total: xmlArquivos.length,
+      arquivos: xmlArquivos,
+    }
+  } catch (err: unknown) {
+    return {
+      ok: false,
+      total: 0,
+      arquivos: [] as string[],
+      xMotivo: mensagemErro(err),
+    }
   }
 })

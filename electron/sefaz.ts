@@ -63,6 +63,12 @@ export interface NfeProc {
   versao: string
   dhInc: string
   nProt: string
+  /** Número do documento (nNF) */
+  nNF?: string
+  /** Valor total do cupom (vNF) */
+  vNF?: string
+  /** Data/Hora de emissão (dhEmi) */
+  dhEmi?: string
   nfeXml: string
 }
 
@@ -460,16 +466,28 @@ function parseDownload(xmlStr: string): ResultadoDownload {
   if (proc && typeof proc === 'object') {
     const nfeNode = proc.nfeProc as Record<string, unknown> | undefined
     if (nfeNode && typeof nfeNode === 'object') {
+      // Reconstrói XML válido — não JSON — para poder salvar o arquivo .xml
+      const nodeComNs = { ...(nfeNode as Record<string, unknown>) }
+      if (!('@_xmlns' in nodeComNs)) nodeComNs['@_xmlns'] = NAMESPACE
+      const nfeXml = xmlBuilder.build({ nfeProc: nodeComNs }) as string
+
+      // Extrai campos do XML para o relatório (regex por performance e simplicidade).
+      // Campos esperados na estrutura da NFC-e:
+      // - <dhEmi> ... </dhEmi>
+      // - <nNF> ... </nNF>
+      // - <vNF> ... </vNF>
+      const nNF = nfeXml.match(/<nNF>([^<]+)<\/nNF>/)?.[1]?.trim()
+      const vNF = nfeXml.match(/<vNF>([^<]+)<\/vNF>/)?.[1]?.trim()
+      const dhEmi = nfeXml.match(/<dhEmi>([^<]+)<\/dhEmi>/)?.[1]?.trim()
+
       nfeProc = {
         versao: String(nfeNode['@_versao'] ?? ''),
-        dhInc:  String(nfeNode.dhInc      ?? ''),
-        nProt:  String(nfeNode.nProt      ?? ''),
-        nfeXml: (() => {
-          // Reconstrói XML válido — não JSON — para poder salvar o arquivo .xml
-          const nodeComNs = { ...(nfeNode as Record<string, unknown>) }
-          if (!('@_xmlns' in nodeComNs)) nodeComNs['@_xmlns'] = NAMESPACE
-          return xmlBuilder.build({ nfeProc: nodeComNs }) as string
-        })(),
+        dhInc: String(nfeNode.dhInc ?? ''),
+        nProt: String(nfeNode.nProt ?? ''),
+        nNF,
+        vNF,
+        dhEmi,
+        nfeXml,
       }
     }
 

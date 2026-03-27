@@ -44,6 +44,14 @@ contextBridge.exposeInMainWorld('electron', {
     downloadLote: (config: ConfigCert & { thumbprint?: string }, chaves: string[], pastaSaida: string) =>
       ipcRenderer.invoke('sefaz:download-lote', config, chaves, pastaSaida),
 
+    downloadLoteRelatorio: (
+      config: ConfigCert & { thumbprint?: string },
+      chaves: string[],
+      pastaSaida: string,
+      relatorioModo: 'agora' | 'depois' | 'nenhum'
+    ) =>
+      ipcRenderer.invoke('sefaz:download-lote', config, chaves, pastaSaida, relatorioModo),
+
     onProgressoListagem: (cb: (total: number) => void) => {
       ipcRenderer.on('sefaz:progresso-listagem', (_e, total) => cb(total))
       return () => ipcRenderer.removeAllListeners('sefaz:progresso-listagem')
@@ -59,6 +67,13 @@ contextBridge.exposeInMainWorld('electron', {
     selecionarPasta:  ()                                => ipcRenderer.invoke('fs:selecionar-pasta'),
     salvarXml:        (c: string, n: string)            => ipcRenderer.invoke('fs:salvar-xml', c, n),
     abrirPasta:       (caminho: string)                 => ipcRenderer.invoke('fs:abrir-pasta', caminho),
+  },
+
+  relatorio: {
+    gerarComparativoCsv: (pastaSaida: string) =>
+      ipcRenderer.invoke('relatorio:comparativo-csv', pastaSaida),
+    listarXmls: (pastaSaida: string) =>
+      ipcRenderer.invoke('relatorio:listar-xmls', pastaSaida),
   },
 
   app: {

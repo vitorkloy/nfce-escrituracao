@@ -43,6 +43,8 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
   const [keyFilterText, setKeyFilterText] = useState('')
   const [certificateCnpjDigits, setCertificateCnpjDigits] = useState('')
   const [emitenteFilter, setEmitenteFilter] = useState<EmitenteFilter>('todos')
+  const [showRelatorioModal, setShowRelatorioModal] = useState(false)
+  const [downloadKeysSnapshot, setDownloadKeysSnapshot] = useState<string[]>([])
 
   useEffect(() => {
     if (!isElectron) return
@@ -167,9 +169,9 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
     : keys
   const visibleRows = afterTextFilter.filter((item) => matchesEmitenteFilter(item.chave))
 
-  async function downloadBatchXml() {
+  async function downloadBatchXmlImpl(relatorioModo: 'agora' | 'depois') {
     if (!isElectron) return
-    if (selectedKeys.length === 0) {
+    if (downloadKeysSnapshot.length === 0) {
       showToast('info', 'Selecione ao menos uma chave.')
       return
     }
@@ -184,34 +186,40 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
 
     if (!targetFolder) return
 
-    showToast('info', `Iniciando download de ${selectedKeys.length} XMLs…`)
-    onLoadingStateChange({ type: 'lote', atual: 0, total: selectedKeys.length })
+    showToast('info', `Iniciando download de ${downloadKeysSnapshot.length} XMLs…`)
+    onLoadingStateChange({ type: 'lote', atual: 0, total: downloadKeysSnapshot.length })
     if (isElectron && window.electron?.app) window.electron.app.setBusy(true)
 
     try {
-      const rawResult = await window.electron.sefaz.downloadLote(
+      const rawResult = await window.electron.sefaz.downloadLoteRelatorio(
         certificateState as never,
-        selectedKeys.map((item) => item.chave),
-        targetFolder
+        downloadKeysSnapshot,
+        targetFolder,
+        relatorioModo
       )
-      const resultado = rawResult as BatchDownloadResponse
+      const resultado = rawResult as BatchDownloadResponse & {
+        relatorio?: { arquivo?: string }
+      }
       const resultados = resultado.resultados ?? []
       const failed = resultados.filter((r) => !r.ok)
       const errorCount = failed.length
 
       if (errorCount === 0) {
-        showToast('ok', `${selectedKeys.length} XML(s) salvos com sucesso.`)
+        showToast('ok', `${downloadKeysSnapshot.length} XML(s) salvos com sucesso.`)
         try {
           await window.electron.fs.abrirPasta(targetFolder)
         } catch {
           /* pasta já foi escolhida; falha ao abrir é opcional */
+        }
+        if (relatorioModo === 'agora' && resultado.relatorio?.arquivo) {
+          showToast('ok', `Relatório CSV gerado: ${resultado.relatorio.arquivo}`)
         }
       } else {
         const firstError = (failed[0]?.erro ?? 'Erro desconhecido').slice(0, 150)
         const ellipsis = (failed[0]?.erro?.length ?? 0) > 150 ? '…' : ''
         showToast(
           'erro',
-          `${selectedKeys.length - errorCount} OK · ${errorCount} com erro: ${firstError}${ellipsis}`
+          `${downloadKeysSnapshot.length - errorCount} OK · ${errorCount} com erro: ${firstError}${ellipsis}`
         )
       }
     } catch (err) {
@@ -220,6 +228,16 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
       onLoadingStateChange({ type: null })
       if (isElectron && window.electron?.app) window.electron.app.setBusy(false)
     }
+  }
+
+  function requestDownloadWithReport() {
+    if (!isElectron) return
+    if (selectedKeys.length === 0) {
+      showToast('info', 'Selecione ao menos uma chave.')
+      return
+    }
+    setDownloadKeysSnapshot(selectedKeys.map((item) => item.chave))
+    setShowRelatorioModal(true)
   }
 
   return (
@@ -344,7 +362,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
                   })()}
                 <button
                   type="button"
-                  onClick={downloadBatchXml}
+                  onClick={requestDownloadWithReport}
                   className={`flex items-center gap-1.5 px-4 py-1.5 text-xs ${BUTTON_TEAL_GHOST_CLASS}`}
                 >
                   ↓ Baixar XMLs ({selectedKeys.length})
@@ -452,6 +470,64 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
           </table>
         )}
       </div>
+
+      {showRelatorioModal && (
+        <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center no-drag">
+          <div className="w-full max-w-[560px] rounded bg-[var(--bg-surface)] border border-[var(--border)] p-4">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">
+              Gerar relatório CSV agora ou depois?
+            </h3>
+            <p className="text-xs text-[var(--text-secondary)] mb-4">
+              Você está iniciando um download em lote. O relatório interno usa os XMLs baixados.
+              Durante o download, fechar a janela pode interromper o processo.
+            </p>
+
+            <div className="text-xs text-[var(--text-muted)] mb-4">
+              <p className="mb-1">
+                <span className="font-semibold text-[var(--text-primary)]">Gerar agora</span>: cria{" "}
+                <span className="font-mono">comparativo_nfce.csv</span> na pasta escolhida.
+              </p>
+              <p>
+                <span className="font-semibold text-[var(--text-primary)]">Gerar depois</span>: você gera na aba{" "}
+                <span className="font-semibold">Relatório</span> quando quiser.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRelatorioModal(false)
+                  setDownloadKeysSnapshot([])
+                }}
+                className="px-4 py-2.5 rounded text-xs font-semibold no-drag border border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-secondary)]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowRelatorioModal(false)
+                  await downloadBatchXmlImpl('agora')
+                }}
+                className={`px-4 py-2.5 rounded text-xs font-semibold no-drag border border-[var(--teal-dim)] bg-[var(--teal-glow)] text-[var(--teal)]`}
+              >
+                Gerar agora
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowRelatorioModal(false)
+                  await downloadBatchXmlImpl('depois')
+                }}
+                className="px-4 py-2.5 rounded text-xs font-semibold no-drag border border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-primary)]"
+              >
+                Gerar depois
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

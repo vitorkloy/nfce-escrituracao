@@ -39,6 +39,9 @@ interface NfeProc {
   dhInc: string
   nProt: string
   nfeXml: string
+  nNF?: string
+  vNF?: string
+  dhEmi?: string
 }
 
 interface EventoProc {
@@ -89,7 +92,23 @@ declare global {
           config: SefazConfig,
           chaves: string[],
           pastaSaida: string
-        ): Promise<{ chave: string; ok: boolean; erro?: string }[]>
+        ): Promise<{
+          ok: boolean
+          resultados: Array<{ chave: string; ok: boolean; erro?: string }>
+          xMotivo?: string
+          relatorio?: { arquivo: string; gerados: number; falhas: number }
+        }>
+        downloadLoteRelatorio(
+          config: SefazConfig,
+          chaves: string[],
+          pastaSaida: string,
+          relatorioModo: 'agora' | 'depois' | 'nenhum'
+        ): Promise<{
+          ok: boolean
+          resultados: Array<{ chave: string; ok: boolean; erro?: string }>
+          xMotivo?: string
+          relatorio?: { arquivo: string; gerados: number; falhas: number }
+        }>
         onProgressoListagem(cb: (total: number) => void): () => void
         onProgressoLote(cb: (info: ProgressoLote) => void): () => void
       }
@@ -97,6 +116,21 @@ declare global {
         selecionarPasta(): Promise<string | null>
         salvarXml(conteudo: string, nomeArquivo: string): Promise<boolean>
         abrirPasta(caminho: string): Promise<void>
+      }
+      relatorio: {
+        gerarComparativoCsv(pastaSaida: string): Promise<{
+          ok: boolean
+          arquivo?: string
+          gerados?: number
+          falhas?: number
+          xMotivo?: string
+        }>
+        listarXmls(pastaSaida: string): Promise<{
+          ok: boolean
+          total: number
+          arquivos: string[]
+          xMotivo?: string
+        }>
       }
       app: {
         setBusy(busy: boolean): void
