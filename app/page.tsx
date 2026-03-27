@@ -1,12 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { IonIcon } from '@ionic/react'
+import { bookOutline, documentTextOutline, downloadOutline, listOutline, settingsOutline } from 'ionicons/icons'
 import { useIsElectron } from '@/hooks/useIsElectron'
 import { ThemeSelector } from '@/components/nfce/theme-selector'
 import { ConfigPanel } from '@/components/nfce/panels/config-panel'
 import { KeyListPanel } from '@/components/nfce/panels/key-list-panel'
 import { DownloadXmlPanel } from '@/components/nfce/panels/download-xml-panel'
 import { RelatorioPanel } from '@/components/nfce/panels/relatorio-panel'
+import { ManualPanel } from '@/components/nfce/panels/manual-panel'
 import { LoadingOverlay } from '@/components/nfce/ui/loading-overlay'
 import { ToastStack } from '@/components/nfce/ui/toast-stack'
 import {
@@ -20,10 +23,11 @@ const MAX_VISIBLE_TOASTS = 5
 const TOAST_AUTO_DISMISS_MS = 5000
 
 const MAIN_TABS: { id: AppTab; label: string; icon: string }[] = [
-  { id: 'config', label: 'Certificado', icon: '⚙' },
-  { id: 'listagem', label: 'Listagem', icon: '≡' },
-  { id: 'download', label: 'Download XML', icon: '↓' },
-  { id: 'relatorio', label: 'Relatório', icon: '≋' },
+  { id: 'config', label: 'Certificado', icon: settingsOutline },
+  { id: 'listagem', label: 'Listagem', icon: listOutline },
+  { id: 'download', label: 'Download XML', icon: downloadOutline },
+  { id: 'relatorio', label: 'Relatório', icon: documentTextOutline },
+  { id: 'manual', label: 'Manual', icon: bookOutline },
 ]
 
 export default function Home() {
@@ -132,9 +136,7 @@ export default function Home() {
         <div className="drag-region h-8 shrink-0" />
         <div className="px-5 pb-6">
           <div className="flex items-center gap-2.5 mb-1">
-            <span className="text-2xl text-[var(--teal)]">
-              ⬡
-            </span>
+            <IonIcon icon={documentTextOutline} className="text-2xl text-[var(--teal)]" />
             <span className="font-semibold text-sm leading-tight text-[var(--text-primary)]">
               Escrituração
               <br />
@@ -219,7 +221,7 @@ export default function Home() {
               ].join(' ')}
               aria-current={activeTab === tab.id ? 'page' : undefined}
             >
-              <span className="w-5 text-center text-base">{tab.icon}</span>
+              <IonIcon icon={tab.icon} className="w-5 h-5" />
               {tab.label}
             </button>
           ))}
@@ -270,6 +272,11 @@ export default function Home() {
           {activeTab === 'relatorio' && (
             <div className="h-full flex flex-col overflow-hidden">
               <RelatorioPanel showToast={showToast} />
+            </div>
+          )}
+          {activeTab === 'manual' && (
+            <div className="h-full flex flex-col overflow-hidden">
+              <ManualPanel />
             </div>
           )}
         </div>

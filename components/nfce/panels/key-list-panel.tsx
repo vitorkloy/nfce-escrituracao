@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { IonIcon } from '@ionic/react'
+import { downloadOutline, searchOutline, squareOutline } from 'ionicons/icons'
 import { useIsElectron } from '@/hooks/useIsElectron'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
@@ -299,7 +301,10 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
                 <Spinner /> {listingProgress > 0 ? `${listingProgress} chaves…` : 'Buscando…'}
               </>
             ) : (
-              '🔎︎ Buscar'
+              <>
+                <IonIcon icon={searchOutline} className="w-4 h-4" />
+                Buscar
+              </>
             )}
           </button>
         </div>
@@ -365,7 +370,8 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
                   onClick={requestDownloadWithReport}
                   className={`flex items-center gap-1.5 px-4 py-1.5 text-xs ${BUTTON_TEAL_GHOST_CLASS}`}
                 >
-                  ↓ Baixar XMLs ({selectedKeys.length})
+                  <IonIcon icon={downloadOutline} className="w-3.5 h-3.5" />
+                  Baixar XMLs ({selectedKeys.length})
                 </button>
               </div>
             )}
@@ -388,7 +394,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
       <div className="flex-1 overflow-auto">
         {keys.length === 0 && !isSearching && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-[var(--text-muted)]">
-            <span className="text-4xl">◫</span>
+            <IonIcon icon={squareOutline} className="text-4xl" />
             <span className="text-sm">Nenhuma busca realizada</span>
           </div>
         )}

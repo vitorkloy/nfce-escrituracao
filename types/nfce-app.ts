@@ -3,7 +3,7 @@
  * Mantidos fora dos componentes para leitura e reutilização mais simples.
  */
 
-export type AppTab = 'config' | 'listagem' | 'download' | 'relatorio'
+export type AppTab = 'config' | 'listagem' | 'download' | 'relatorio' | 'manual'
 
 export type SefazEnvironment = 'homologacao' | 'producao'
 

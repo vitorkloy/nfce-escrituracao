@@ -15,9 +15,11 @@
     "diagnostico:listagem": "node scripts/diagnostico-listagem.cjs"
   },
   "dependencies": {
+    "@ionic/react": "^8.8.2",
     "axios": "^1.7.2",
     "electron-store": "^8.2.0",
     "fast-xml-parser": "^4.4.0",
+    "ionicons": "^8.0.13",
     "next": "14.2.5",
     "next-themes": "^0.4.6",
     "react": "^18.3.1",

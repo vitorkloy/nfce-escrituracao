@@ -18,7 +18,7 @@ import {
   type ResultadoDownload,
 } from './sefaz'
 
-const execAsync     = promisify(exec)
+const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
 
 // ---------------------------------------------------------------------------
@@ -83,7 +83,7 @@ type RelatorioModo = 'agora' | 'depois' | 'nenhum'
 function escapeCsvCell(value: unknown): string {
   const s = value == null ? '' : String(value)
   // Mantém Excel feliz: aspas e separadores
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+  if (/[;"\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
   return s
 }
 
@@ -96,7 +96,9 @@ function gerarComparativoCsv(
     escapeCsvCell(l.dhEmi ?? ''),
     escapeCsvCell(l.vNF ?? ''),
   ])
-  return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+  // "sep=;" força o Excel a usar ponto-e-vírgula como delimitador
+  // BOM UTF-8 evita caracteres acentuados corrompidos no Windows/Excel.
+  return `\uFEFFsep=;\n${[headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n')}`
 }
 
 /** Ícone da janela / taskbar: empacotado usa extraResources; em dev usa public/. */
@@ -241,10 +243,10 @@ function getWindow(): BrowserWindow {
 // ---------------------------------------------------------------------------
 
 function mensagemErro(err: unknown): string {
-  if (err instanceof SefazError)        return `[${err.cStat}] ${err.xMotivo}`
+  if (err instanceof SefazError) return `[${err.cStat}] ${err.xMotivo}`
   if (err instanceof SefazNetworkError) return err.message
-  if (err instanceof SefazParseError)   return `Erro de parse: ${err.message}`
-  if (err instanceof Error)             return err.message
+  if (err instanceof SefazParseError) return `Erro de parse: ${err.message}`
+  if (err instanceof Error) return err.message
   return 'Erro desconhecido. Tente novamente.'
 }
 
@@ -276,7 +278,7 @@ function validarThumbprint(thumbprint: string): void {
 }
 
 async function listarCertificadosSistema(): Promise<CertInfo[]> {
-  if (process.platform === 'win32')  return listarCertsWindows()
+  if (process.platform === 'win32') return listarCertsWindows()
   if (process.platform === 'darwin') return listarCertsMac()
   throw new Error('Listagem automática de certificados disponível apenas no Windows e macOS.')
 }
@@ -328,13 +330,13 @@ async function listarCertsWindows(): Promise<CertInfo[]> {
 }
 
 function parseCertWindows(c: Record<string, string>): CertInfo {
-  const subject    = c.Subject    ?? ''
+  const subject = c.Subject ?? ''
   const thumbprint = (c.Thumbprint ?? '').toUpperCase().replace(/\s/g, '')
-  const emissor    = c.Issuer     ?? ''
-  const validade   = c.NotAfter   ?? ''
-  const cn         = extrairCampo(subject, 'CN')
-  const cnpj       = extrairCNPJ(subject)
-  const nome       = cn || subject
+  const emissor = c.Issuer ?? ''
+  const validade = c.NotAfter ?? ''
+  const cn = extrairCampo(subject, 'CN')
+  const cnpj = extrairCNPJ(subject)
+  const nome = cn || subject
 
   let expirado = false
   if (validade) {
@@ -364,7 +366,7 @@ async function listarCertsMac(): Promise<CertInfo[]> {
 
   while ((m = regex.exec(stdout)) !== null) {
     const thumbprint = m[1].toUpperCase()
-    const nome       = m[2]
+    const nome = m[2]
     try {
       const d = await detalhesCertMac(thumbprint)
       certs.push({ thumbprint, subject: nome, cnpj: extrairCNPJ(nome), nome, ...d, origem: 'store' })
@@ -386,7 +388,7 @@ async function detalhesCertMac(
     `security find-certificate -c "${safe}" -p login.keychain | openssl x509 -noout -issuer -enddate`,
     { timeout: 8_000 }
   )
-  const emissor  = stdout.match(/issuer=(.+)/)?.[1]  ?? ''
+  const emissor = stdout.match(/issuer=(.+)/)?.[1] ?? ''
   const validade = stdout.match(/notAfter=(.+)/)?.[1] ?? ''
   let expirado = false
   if (validade) {
@@ -425,7 +427,7 @@ function extrairCNPJ(texto: string): string {
 async function exportarCertWindows(thumbprint: string, senha: string): Promise<string> {
   validarThumbprint(thumbprint)
 
-  const sufixo  = Math.random().toString(36).substring(2, 8)
+  const sufixo = Math.random().toString(36).substring(2, 8)
   const tmpPath = path.join(os.tmpdir(), `nfce_${thumbprint.substring(0, 8)}_${sufixo}.pfx`)
   const tmpPathPs = tmpPath.replace(/\\/g, '\\\\')
 
@@ -469,7 +471,7 @@ async function exportarCertWindows(thumbprint: string, senha: string): Promise<s
     // Em vez disso, extraímos a mensagem limpa que o PS escreveu no stdout
     const saida = (err as { stdout?: string; stderr?: string })
     const msgPS = (saida?.stdout ?? '').match(/^erro:\s*(.+)/mi)?.[1]?.trim()
-                ?? (saida?.stderr ?? '').trim()
+      ?? (saida?.stderr ?? '').trim()
 
     // Classifica erros conhecidos em mensagens amigáveis
     const msgFinal = traduzirErroCert(msgPS || '')
@@ -599,7 +601,7 @@ async function obterCNPJDoCertificado(
   try {
     if (config.thumbprint && config.origemStore) {
       const certs = await listarCertificadosSistema()
-      const cert  = certs.find(c =>
+      const cert = certs.find(c =>
         c.thumbprint.toUpperCase() === (config.thumbprint ?? '').toUpperCase()
       )
       return cert?.cnpj ?? ''
@@ -608,8 +610,8 @@ async function obterCNPJDoCertificado(
       // Tenta extrair via OpenSSL se disponível
       try {
         const passFile = path.join(os.tmpdir(), `nfce_cnpj_${Date.now()}.txt`)
-        const pfxEsc   = config.pfxPath.replace(/\\/g, '/')
-        const passEsc  = passFile.replace(/\\/g, '/')
+        const pfxEsc = config.pfxPath.replace(/\\/g, '/')
+        const passEsc = passFile.replace(/\\/g, '/')
         // Usa senha vazia se não disponível (modo store)
         fs.writeFileSync(passFile, '', { mode: 0o600 })
         try {
@@ -740,7 +742,7 @@ ipcMain.handle(
     try {
       // Resolve o certificado — lança erro explícito se não configurado
       const resolved = await resolverPfx(config)
-      pfxPath   = resolved.pfxPath
+      pfxPath = resolved.pfxPath
       tmpCriado = resolved.tmpCriado
 
       const cfg = { ...config, pfxPath, senha: resolved.senha }
@@ -772,12 +774,12 @@ ipcMain.handle(
 ipcMain.handle(
   'sefaz:download-xml',
   async (_e, config: ConfigCert & { thumbprint?: string }, chave: string) => {
-    let pfxPath  = ''
+    let pfxPath = ''
     let tmpCriado = false
 
     try {
       const resolved = await resolverPfx(config)
-      pfxPath   = resolved.pfxPath
+      pfxPath = resolved.pfxPath
       tmpCriado = resolved.tmpCriado
 
       const resultado: ResultadoDownload = await downloadXml({ ...config, pfxPath, senha: resolved.senha }, chave)
@@ -803,7 +805,7 @@ ipcMain.handle(
     pastaSaida: string,
     relatorioModo: RelatorioModo = 'nenhum'
   ) => {
-    let pfxPath  = ''
+    let pfxPath = ''
     let tmpCriado = false
     const resultados: { chave: string; ok: boolean; erro?: string }[] = []
     const relatorioLinhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string }> = []
@@ -819,7 +821,7 @@ ipcMain.handle(
 
     try {
       const resolved = await resolverPfx(config)
-      pfxPath   = resolved.pfxPath
+      pfxPath = resolved.pfxPath
       tmpCriado = resolved.tmpCriado
 
       const cfg = { ...config, pfxPath, senha: resolved.senha }
@@ -829,14 +831,14 @@ ipcMain.handle(
       // o pool de conexões estável durante a operação inteira.
       const agente = criarAgente(cfg.pfxPath, cfg.senha)
 
-      const MAX_TENTATIVAS          = 3
-      const DELAY_ENTRE_DOWNLOADS   = 300   // ms — evita rate-limit da SEFAZ
-      const DELAY_RETRY_BASE        = 2000  // ms — backoff base no retry
+      const MAX_TENTATIVAS = 3
+      const DELAY_ENTRE_DOWNLOADS = 300   // ms — evita rate-limit da SEFAZ
+      const DELAY_RETRY_BASE = 2000  // ms — backoff base no retry
 
       for (let i = 0; i < chaves.length; i++) {
         const chave = chaves[i]
         let tentativa = 0
-        let baixado   = false
+        let baixado = false
 
         while (tentativa < MAX_TENTATIVAS && !baixado) {
           try {
@@ -939,7 +941,7 @@ ipcMain.handle(
 
 ipcMain.handle('fs:selecionar-pasta', async () => {
   try {
-    const win    = getWindow()
+    const win = getWindow()
     const result = await dialog.showOpenDialog(win, {
       title: 'Selecionar pasta de destino',
       properties: ['openDirectory', 'createDirectory'],
@@ -953,7 +955,7 @@ ipcMain.handle('fs:selecionar-pasta', async () => {
 
 ipcMain.handle('fs:salvar-xml', async (_e, conteudo: string, nomeArquivo: string) => {
   try {
-    const win    = getWindow()
+    const win = getWindow()
     const result = await dialog.showSaveDialog(win, {
       title: 'Salvar XML',
       defaultPath: nomeArquivo,

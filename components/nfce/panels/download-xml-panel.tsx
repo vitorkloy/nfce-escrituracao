@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { IonIcon } from '@ionic/react'
+import { downloadOutline, documentTextOutline, saveOutline } from 'ionicons/icons'
 import { useIsElectron } from '@/hooks/useIsElectron'
 import { getErrorMessage } from '@/lib/error-utils'
 import { TAMANHO_CHAVE_ACESSO } from '@/lib/nfce-format'
@@ -111,7 +113,10 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
                 <Spinner /> Baixando…
               </>
             ) : (
-              '↓ Baixar'
+              <>
+                <IonIcon icon={downloadOutline} className="w-4 h-4" />
+                Baixar
+              </>
             )}
           </button>
         </div>
@@ -125,7 +130,7 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
           <div
             className="flex flex-col items-center justify-center h-full gap-3 text-[var(--text-muted)]"
           >
-            <span className="text-4xl">⬡</span>
+            <IonIcon icon={documentTextOutline} className="text-4xl" />
             <span className="text-sm">Informe uma chave para baixar o XML</span>
           </div>
         )}
@@ -157,7 +162,8 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
                     }
                     className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium ${BUTTON_TEAL_GHOST_CLASS}`}
                   >
-                    ↓ Salvar XML
+                    <IonIcon icon={saveOutline} className="w-3.5 h-3.5" />
+                    Salvar XML
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
@@ -201,7 +207,8 @@ export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPan
                         onClick={() => saveXmlFile(evento.eventoXml, `${evento.nProt}_evento.xml`)}
                         className={`flex items-center gap-1 px-2.5 py-1 text-xs ${BUTTON_SUBTLE_CLASS}`}
                       >
-                        ↓ XML
+                        <IonIcon icon={downloadOutline} className="w-3.5 h-3.5" />
+                        XML
                       </button>
                     </div>
                   ))}
