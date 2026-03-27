@@ -80,6 +80,12 @@ let ignorarConfirmacaoFechamento = false
 
 type RelatorioModo = 'agora' | 'depois' | 'nenhum'
 
+/** Dados do emitente no topo do relatório (texto; CSV não guarda negrito/cor). */
+interface CabecalhoEmpresaRelatorio {
+  nome?: string
+  cnpj?: string
+}
+
 function escapeCsvCell(value: unknown): string {
   const s = value == null ? '' : String(value)
   // Mantém Excel feliz: aspas e separadores
@@ -87,9 +93,38 @@ function escapeCsvCell(value: unknown): string {
   return s
 }
 
+function formatarCnpjRelatorioDigitos(raw: string | undefined): string {
+  if (!raw) return '—'
+  const d = raw.replace(/\D/g, '')
+  if (d.length !== 14) {
+    const t = raw.trim()
+    return t || '—'
+  }
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12, 14)}`
+}
+
+/** Razão social e CNPJ do emitente no XML da NFC-e. */
+function extrairEmitenteDoNfceXml(xmlStr: string): CabecalhoEmpresaRelatorio {
+  const m = xmlStr.match(/<emit>([\s\S]*?)<\/emit>/)
+  if (!m) return {}
+  const bloco = m[1]
+  const cnpj = bloco.match(/<CNPJ>([^<]+)<\/CNPJ>/)?.[1]?.trim()
+  const xNome = bloco.match(/<xNome>([^<]+)<\/xNome>/)?.[1]?.trim()
+  return { nome: xNome, cnpj }
+}
+
 function gerarComparativoCsv(
-  linhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string }>
+  linhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string }>,
+  cabecalhoEmpresa?: CabecalhoEmpresaRelatorio
 ): string {
+  const nomeEmpresa = (cabecalhoEmpresa?.nome ?? '').trim() || '—'
+  const cnpjFmt = formatarCnpjRelatorioDigitos(cabecalhoEmpresa?.cnpj)
+  const linhaEmpresa = [
+    escapeCsvCell(`EMPRESA : ${nomeEmpresa}`),
+    escapeCsvCell(`CNPJ ${cnpjFmt}`),
+    '',
+  ].join(';')
+
   const headers = ['Número do documento', 'Data de emissão', 'Valor do cupom']
   const rows = linhas.map((l) => [
     escapeCsvCell(l.nNF ?? ''),
@@ -98,7 +133,7 @@ function gerarComparativoCsv(
   ])
   // "sep=;" força o Excel a usar ponto-e-vírgula como delimitador
   // BOM UTF-8 evita caracteres acentuados corrompidos no Windows/Excel.
-  return `\uFEFFsep=;\n${[headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n')}`
+  return `\uFEFFsep=;\n${[linhaEmpresa, headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n')}`
 }
 
 function isEventoCancelamento(xmlStr: string): boolean {
@@ -815,6 +850,7 @@ ipcMain.handle(
     let tmpCriado = false
     const resultados: { chave: string; ok: boolean; erro?: string }[] = []
     const relatorioLinhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string; cancelada?: boolean }> = []
+    let cabecalhoEmpresaRelatorio: CabecalhoEmpresaRelatorio | undefined
     let relatorioFalhas = 0
 
     // Valida a pasta de saída antes de começar
@@ -863,6 +899,11 @@ ipcMain.handle(
                 fs.writeFileSync(nome, resultado.nfeProc.nfeXml, 'utf-8')
               } catch (e) {
                 throw new Error(`Falha ao salvar XML da NFC-e: ${mensagemErro(e)}`)
+              }
+
+              if (!cabecalhoEmpresaRelatorio) {
+                const em = extrairEmitenteDoNfceXml(resultado.nfeProc.nfeXml)
+                if (em.nome || em.cnpj) cabecalhoEmpresaRelatorio = em
               }
 
               if (resultado.nfeProc.nNF && resultado.nfeProc.vNF) {
@@ -925,8 +966,8 @@ ipcMain.handle(
       if (relatorioModo === 'agora') {
         const linhasAprovadas = relatorioLinhas.filter((l) => !l.cancelada)
         const linhasCanceladas = relatorioLinhas.filter((l) => l.cancelada)
-        const csvAprovado = gerarComparativoCsv(linhasAprovadas)
-        const csvCancelamento = gerarComparativoCsv(linhasCanceladas)
+        const csvAprovado = gerarComparativoCsv(linhasAprovadas, cabecalhoEmpresaRelatorio)
+        const csvCancelamento = gerarComparativoCsv(linhasCanceladas, cabecalhoEmpresaRelatorio)
         fs.writeFileSync(path.join(pastaSaida, 'comparativo_aprovado.csv'), csvAprovado, 'utf-8')
         fs.writeFileSync(path.join(pastaSaida, 'comparativo_cancelamento.csv'), csvCancelamento, 'utf-8')
         return {
@@ -1020,6 +1061,7 @@ ipcMain.handle('relatorio:comparativo-csv', async (_e, pastaSaida: string) => {
     const eventoArquivos = entries.filter((f) => /_evento\.xml$/i.test(f))
 
     const linhas: Array<{ chave: string; nProt?: string; dhEmi?: string; nNF?: string; vNF?: string }> = []
+    let cabecalhoEmpresa: CabecalhoEmpresaRelatorio | undefined
     const canceladasPorChave = new Set<string>()
     const canceladasPorProtocolo = new Set<string>()
     let falhas = 0
@@ -1050,6 +1092,11 @@ ipcMain.handle('relatorio:comparativo-csv', async (_e, pastaSaida: string) => {
         continue
       }
 
+      if (!cabecalhoEmpresa) {
+        const em = extrairEmitenteDoNfceXml(conteudo)
+        if (em.nome || em.cnpj) cabecalhoEmpresa = em
+      }
+
       const { chave, nProt, dhEmi, nNF, vNF } = extrairRelatorioDoXml(conteudo)
       if (nNF && vNF) {
         linhas.push({
@@ -1075,8 +1122,8 @@ ipcMain.handle('relatorio:comparativo-csv', async (_e, pastaSaida: string) => {
         !(l.nProt && canceladasPorProtocolo.has(l.nProt))
     )
 
-    fs.writeFileSync(path.join(pastaSaida, 'comparativo_aprovado.csv'), gerarComparativoCsv(linhasAprovadas), 'utf-8')
-    fs.writeFileSync(path.join(pastaSaida, 'comparativo_cancelamento.csv'), gerarComparativoCsv(linhasCanceladas), 'utf-8')
+    fs.writeFileSync(path.join(pastaSaida, 'comparativo_aprovado.csv'), gerarComparativoCsv(linhasAprovadas, cabecalhoEmpresa), 'utf-8')
+    fs.writeFileSync(path.join(pastaSaida, 'comparativo_cancelamento.csv'), gerarComparativoCsv(linhasCanceladas, cabecalhoEmpresa), 'utf-8')
 
     return {
       ok: true,

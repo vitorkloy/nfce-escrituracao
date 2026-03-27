@@ -64,7 +64,10 @@ export function ManualPanel() {
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">Observações importantes</h3>
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
           <li>Não feche o app durante buscas ou downloads em andamento.</li>
-          <li>O CSV contém: número do documento, data de emissão e valor do cupom.</li>
+          <li>
+            O CSV inclui uma linha inicial com <strong>EMPRESA</strong> e <strong>CNPJ</strong> (extraídos do XML)
+            e, em seguida, as colunas número do documento, data de emissão e valor do cupom.
+          </li>
           <li>Para evitar problemas no Excel, abra o CSV preferencialmente como UTF-8.</li>
         </ul>
       </section>
