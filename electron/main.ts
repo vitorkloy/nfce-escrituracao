@@ -1103,17 +1103,54 @@ ipcMain.handle('relatorio:listar-xmls', async (_e, pastaSaida: string) => {
     const xmlArquivos = entries
       .filter((f) => /_nfce\.xml$/i.test(f))
       .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    const eventoArquivos = entries.filter((f) => /_evento\.xml$/i.test(f))
+
+    const canceladasPorChave = new Set<string>()
+    const canceladasPorProtocolo = new Set<string>()
+    for (const arquivo of eventoArquivos) {
+      const full = path.join(pastaSaida, arquivo)
+      let conteudo = ''
+      try {
+        conteudo = fs.readFileSync(full, 'utf-8')
+      } catch {
+        continue
+      }
+      if (!isEventoCancelamento(conteudo)) continue
+      const chNFe = conteudo.match(/<chNFe>([^<]+)<\/chNFe>/)?.[1]?.trim()
+      const nProtAutorizacao = conteudo.match(/<detEvento[\s\S]*?<nProt>([^<]+)<\/nProt>/)?.[1]?.trim()
+      if (chNFe) canceladasPorChave.add(chNFe)
+      if (nProtAutorizacao) canceladasPorProtocolo.add(nProtAutorizacao)
+    }
+
+    const cancelados = xmlArquivos.filter((arquivo) => {
+      const full = path.join(pastaSaida, arquivo)
+      let conteudo = ''
+      try {
+        conteudo = fs.readFileSync(full, 'utf-8')
+      } catch {
+        return false
+      }
+      const { chave, nProt } = extrairRelatorioDoXml(conteudo)
+      return Boolean(
+        (chave && canceladasPorChave.has(chave)) ||
+        (nProt && canceladasPorProtocolo.has(nProt))
+      )
+    })
 
     return {
       ok: true,
       total: xmlArquivos.length,
       arquivos: xmlArquivos,
+      totalCancelados: cancelados.length,
+      cancelados,
     }
   } catch (err: unknown) {
     return {
       ok: false,
       total: 0,
       arquivos: [] as string[],
+      totalCancelados: 0,
+      cancelados: [] as string[],
       xMotivo: mensagemErro(err),
     }
   }

@@ -14,10 +14,12 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
   const [isGerando, setIsGerando] = useState(false)
   const [isCarregandoXmls, setIsCarregandoXmls] = useState(false)
   const [xmlArquivos, setXmlArquivos] = useState<string[]>([])
+  const [xmlCancelados, setXmlCancelados] = useState<string[]>([])
 
   async function carregarPreviewXmls(pastaAlvo: string) {
     if (!isElectron || !pastaAlvo) {
       setXmlArquivos([])
+      setXmlCancelados([])
       return
     }
     setIsCarregandoXmls(true)
@@ -25,12 +27,15 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
       const resp = await window.electron.relatorio.listarXmls(pastaAlvo)
       if (!resp.ok) {
         setXmlArquivos([])
+        setXmlCancelados([])
         showToast('erro', resp.xMotivo ?? 'Falha ao listar XMLs.')
         return
       }
       setXmlArquivos(resp.arquivos ?? [])
+      setXmlCancelados(resp.cancelados ?? [])
     } catch (err) {
       setXmlArquivos([])
+      setXmlCancelados([])
       showToast('erro', err instanceof Error ? err.message : 'Erro ao listar XMLs.')
     } finally {
       setIsCarregandoXmls(false)
@@ -158,6 +163,42 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
           {xmlArquivos.length > 10 && (
             <p className="mt-2 text-[11px] text-[var(--text-muted)]">
               Mostrando 10 de {xmlArquivos.length} arquivos.
+            </p>
+          )}
+        </div>
+
+        <div className="mt-3 rounded border border-[var(--border)] bg-[var(--bg-raised)] p-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs uppercase tracking-widest text-[var(--text-muted)]">
+              Prévia dos cancelados
+            </p>
+            <span className="text-xs text-[var(--text-secondary)]">
+              Total cancelados:{' '}
+              <span className="font-semibold text-[var(--text-primary)]">{xmlCancelados.length}</span>
+            </span>
+          </div>
+
+          {isCarregandoXmls ? (
+            <p className="text-xs text-[var(--text-muted)]">Carregando arquivos…</p>
+          ) : xmlCancelados.length === 0 ? (
+            <p className="text-xs text-[var(--text-muted)]">0 cancelados</p>
+          ) : (
+            <div className="max-h-32 overflow-auto rounded border border-[var(--border)] bg-[var(--bg-surface)]">
+              {xmlCancelados.slice(0, 10).map((arquivo) => (
+                <div
+                  key={arquivo}
+                  className="px-2 py-1 text-xs font-mono border-b border-[var(--border)] last:border-b-0 text-[var(--text-primary)]"
+                  title={arquivo}
+                >
+                  {arquivo}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {xmlCancelados.length > 10 && (
+            <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+              Mostrando 10 de {xmlCancelados.length} cancelados.
             </p>
           )}
         </div>

@@ -143,6 +143,8 @@ declare global {
           ok: boolean
           total: number
           arquivos: string[]
+          totalCancelados: number
+          cancelados: string[]
           xMotivo?: string
         }>
       }
