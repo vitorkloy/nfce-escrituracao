@@ -200,7 +200,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
         relatorioModo
       )
       const resultado = rawResult as BatchDownloadResponse & {
-        relatorio?: { arquivo?: string }
+        relatorio?: { arquivos?: string[]; aprovados?: number; cancelados?: number }
       }
       const resultados = resultado.resultados ?? []
       const failed = resultados.filter((r) => !r.ok)
@@ -213,8 +213,10 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
         } catch {
           /* pasta já foi escolhida; falha ao abrir é opcional */
         }
-        if (relatorioModo === 'agora' && resultado.relatorio?.arquivo) {
-          showToast('ok', `Relatório CSV gerado: ${resultado.relatorio.arquivo}`)
+        if (relatorioModo === 'agora' && resultado.relatorio?.arquivos?.length) {
+          const aprovados = resultado.relatorio.aprovados ?? 0
+          const cancelados = resultado.relatorio.cancelados ?? 0
+          showToast('ok', `Relatórios CSV gerados (${aprovados} aprovados, ${cancelados} cancelados).`)
         }
       } else {
         const firstError = (failed[0]?.erro ?? 'Erro desconhecido').slice(0, 150)
@@ -491,7 +493,8 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
             <div className="text-xs text-[var(--text-muted)] mb-4">
               <p className="mb-1">
                 <span className="font-semibold text-[var(--text-primary)]">Gerar agora</span>: cria{" "}
-                <span className="font-mono">comparativo_nfce.csv</span> na pasta escolhida.
+                <span className="font-mono">comparativo_aprovado.csv</span> e{" "}
+                <span className="font-mono">comparativo_cancelamento.csv</span> na pasta escolhida.
               </p>
               <p>
                 <span className="font-semibold text-[var(--text-primary)]">Gerar depois</span>: você gera na aba{" "}

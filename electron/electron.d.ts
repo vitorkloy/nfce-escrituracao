@@ -96,7 +96,13 @@ declare global {
           ok: boolean
           resultados: Array<{ chave: string; ok: boolean; erro?: string }>
           xMotivo?: string
-          relatorio?: { arquivo: string; gerados: number; falhas: number }
+          relatorio?: {
+            arquivos: string[]
+            gerados: number
+            aprovados: number
+            cancelados: number
+            falhas: number
+          }
         }>
         downloadLoteRelatorio(
           config: SefazConfig,
@@ -107,7 +113,13 @@ declare global {
           ok: boolean
           resultados: Array<{ chave: string; ok: boolean; erro?: string }>
           xMotivo?: string
-          relatorio?: { arquivo: string; gerados: number; falhas: number }
+          relatorio?: {
+            arquivos: string[]
+            gerados: number
+            aprovados: number
+            cancelados: number
+            falhas: number
+          }
         }>
         onProgressoListagem(cb: (total: number) => void): () => void
         onProgressoLote(cb: (info: ProgressoLote) => void): () => void
@@ -120,8 +132,10 @@ declare global {
       relatorio: {
         gerarComparativoCsv(pastaSaida: string): Promise<{
           ok: boolean
-          arquivo?: string
+          arquivos?: string[]
           gerados?: number
+          aprovados?: number
+          cancelados?: number
           falhas?: number
           xMotivo?: string
         }>

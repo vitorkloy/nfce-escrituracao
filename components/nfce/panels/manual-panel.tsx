@@ -53,7 +53,10 @@ export function ManualPanel() {
           <li>Vá para a aba <strong>Relatório</strong>.</li>
           <li>Selecione a pasta onde os `*_nfce.xml` estão salvos.</li>
           <li>Veja a prévia dos arquivos e o total encontrado.</li>
-          <li>Clique em <strong>Gerar CSV</strong> para criar `comparativo_nfce.csv`.</li>
+          <li>
+            Clique em <strong>Gerar CSV</strong> para criar `comparativo_aprovado.csv` e
+            `comparativo_cancelamento.csv`.
+          </li>
         </ul>
       </section>
 

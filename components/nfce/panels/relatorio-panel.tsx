@@ -68,15 +68,16 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
         return
       }
 
-      const arquivo = resp.arquivo ?? 'comparativo_nfce.csv'
       const gerados = resp.gerados ?? 0
+      const aprovados = resp.aprovados ?? 0
+      const cancelados = resp.cancelados ?? 0
       const falhas = resp.falhas ?? 0
 
       showToast(
         'ok',
         falhas > 0
-          ? `CSV gerado (${gerados} OK, ${falhas} falha(s)).`
-          : `CSV gerado com sucesso (${gerados} OK). Arquivo: ${arquivo}`
+          ? `Relatórios gerados (${gerados} XMLs: ${aprovados} aprovados, ${cancelados} cancelados, ${falhas} falha(s)).`
+          : `Relatórios gerados com sucesso (${aprovados} aprovados, ${cancelados} cancelados).`
       )
     } catch (err) {
       showToast('erro', err instanceof Error ? err.message : 'Erro ao gerar CSV.')
@@ -164,7 +165,8 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
 
       <div className="flex-1 overflow-auto p-6">
         <p className="text-sm text-[var(--text-muted)]">
-          O arquivo gerado será salvo como <span className="font-mono">comparativo_nfce.csv</span> dentro da pasta selecionada.
+          Serão gerados os arquivos <span className="font-mono">comparativo_aprovado.csv</span> e{' '}
+          <span className="font-mono">comparativo_cancelamento.csv</span> dentro da pasta selecionada.
         </p>
       </div>
     </div>

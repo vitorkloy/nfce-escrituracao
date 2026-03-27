@@ -101,6 +101,12 @@ function gerarComparativoCsv(
   return `\uFEFFsep=;\n${[headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n')}`
 }
 
+function isEventoCancelamento(xmlStr: string): boolean {
+  const tpEvento = xmlStr.match(/<tpEvento>([^<]+)<\/tpEvento>/)?.[1]?.trim()
+  const descEvento = xmlStr.match(/<descEvento>([^<]+)<\/descEvento>/)?.[1]?.trim().toLowerCase()
+  return tpEvento === '110111' || descEvento === 'cancelamento'
+}
+
 /** Ícone da janela / taskbar: empacotado usa extraResources; em dev usa public/. */
 function resolveWindowIcon(): string | undefined {
   if (process.platform === 'darwin') {
@@ -808,7 +814,7 @@ ipcMain.handle(
     let pfxPath = ''
     let tmpCriado = false
     const resultados: { chave: string; ok: boolean; erro?: string }[] = []
-    const relatorioLinhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string }> = []
+    const relatorioLinhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string; cancelada?: boolean }> = []
     let relatorioFalhas = 0
 
     // Valida a pasta de saída antes de começar
@@ -860,11 +866,13 @@ ipcMain.handle(
               }
 
               if (resultado.nfeProc.nNF && resultado.nfeProc.vNF) {
+                const cancelada = resultado.eventos.some((ev) => ev.eventoXml && isEventoCancelamento(ev.eventoXml))
                 relatorioLinhas.push({
                   chave,
                   dhEmi: resultado.nfeProc.dhEmi,
                   nNF: resultado.nfeProc.nNF,
                   vNF: resultado.nfeProc.vNF,
+                  cancelada,
                 })
               } else {
                 relatorioFalhas++
@@ -915,13 +923,22 @@ ipcMain.handle(
         console.warn(`[Lote] Concluído: ${chaves.length - falhas.length} OK, ${falhas.length} falha(s)`)
       }
       if (relatorioModo === 'agora') {
-        const csv = gerarComparativoCsv(relatorioLinhas)
-        const arquivo = path.join(pastaSaida, 'comparativo_nfce.csv')
-        fs.writeFileSync(arquivo, csv, 'utf-8')
+        const linhasAprovadas = relatorioLinhas.filter((l) => !l.cancelada)
+        const linhasCanceladas = relatorioLinhas.filter((l) => l.cancelada)
+        const csvAprovado = gerarComparativoCsv(linhasAprovadas)
+        const csvCancelamento = gerarComparativoCsv(linhasCanceladas)
+        fs.writeFileSync(path.join(pastaSaida, 'comparativo_aprovado.csv'), csvAprovado, 'utf-8')
+        fs.writeFileSync(path.join(pastaSaida, 'comparativo_cancelamento.csv'), csvCancelamento, 'utf-8')
         return {
           ok: true,
           resultados,
-          relatorio: { arquivo: 'comparativo_nfce.csv', gerados: relatorioLinhas.length, falhas: relatorioFalhas },
+          relatorio: {
+            arquivos: ['comparativo_aprovado.csv', 'comparativo_cancelamento.csv'],
+            gerados: relatorioLinhas.length,
+            aprovados: linhasAprovadas.length,
+            cancelados: linhasCanceladas.length,
+            falhas: relatorioFalhas,
+          },
         }
       }
 
@@ -984,11 +1001,13 @@ ipcMain.handle('fs:abrir-pasta', async (_e, caminho: string) => {
 // IPC — Relatório interno (CSV comparativo)
 // ---------------------------------------------------------------------------
 
-function extrairRelatorioDoXml(xmlStr: string): { dhEmi?: string; nNF?: string; vNF?: string } {
+function extrairRelatorioDoXml(xmlStr: string): { chave?: string; nProt?: string; dhEmi?: string; nNF?: string; vNF?: string } {
+  const chave = xmlStr.match(/<infNFe[^>]*Id="NFe(\d{44})"/)?.[1]
+  const nProt = xmlStr.match(/<nProt>([^<]+)<\/nProt>/)?.[1]?.trim()
   const nNF = xmlStr.match(/<nNF>([^<]+)<\/nNF>/)?.[1]?.trim()
   const vNF = xmlStr.match(/<vNF>([^<]+)<\/vNF>/)?.[1]?.trim()
   const dhEmi = xmlStr.match(/<dhEmi>([^<]+)<\/dhEmi>/)?.[1]?.trim()
-  return { dhEmi, nNF, vNF }
+  return { chave, nProt, dhEmi, nNF, vNF }
 }
 
 ipcMain.handle('relatorio:comparativo-csv', async (_e, pastaSaida: string) => {
@@ -997,12 +1016,31 @@ ipcMain.handle('relatorio:comparativo-csv', async (_e, pastaSaida: string) => {
     if (!fs.existsSync(pastaSaida)) throw new Error('Pasta de destino não encontrada.')
 
     const entries = fs.readdirSync(pastaSaida)
-    const xmlArquivos = entries.filter((f) => /_nfce\.xml$/i.test(f))
+    const nfceArquivos = entries.filter((f) => /_nfce\.xml$/i.test(f))
+    const eventoArquivos = entries.filter((f) => /_evento\.xml$/i.test(f))
 
-    const linhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string }> = []
+    const linhas: Array<{ chave: string; nProt?: string; dhEmi?: string; nNF?: string; vNF?: string }> = []
+    const canceladasPorChave = new Set<string>()
+    const canceladasPorProtocolo = new Set<string>()
     let falhas = 0
 
-    for (const arquivo of xmlArquivos) {
+    for (const arquivo of eventoArquivos) {
+      const full = path.join(pastaSaida, arquivo)
+      let conteudo = ''
+      try {
+        conteudo = fs.readFileSync(full, 'utf-8')
+      } catch {
+        falhas++
+        continue
+      }
+      if (!isEventoCancelamento(conteudo)) continue
+      const chNFe = conteudo.match(/<chNFe>([^<]+)<\/chNFe>/)?.[1]?.trim()
+      const nProtAutorizacao = conteudo.match(/<detEvento[\s\S]*?<nProt>([^<]+)<\/nProt>/)?.[1]?.trim()
+      if (chNFe) canceladasPorChave.add(chNFe)
+      if (nProtAutorizacao) canceladasPorProtocolo.add(nProtAutorizacao)
+    }
+
+    for (const arquivo of nfceArquivos) {
       const full = path.join(pastaSaida, arquivo)
       let conteudo = ''
       try {
@@ -1012,22 +1050,40 @@ ipcMain.handle('relatorio:comparativo-csv', async (_e, pastaSaida: string) => {
         continue
       }
 
-      const { dhEmi, nNF, vNF } = extrairRelatorioDoXml(conteudo)
+      const { chave, nProt, dhEmi, nNF, vNF } = extrairRelatorioDoXml(conteudo)
       if (nNF && vNF) {
-        linhas.push({ chave: arquivo.replace(/_nfce\.xml$/i, ''), dhEmi, nNF, vNF })
+        linhas.push({
+          chave: chave ?? arquivo.replace(/_nfce\.xml$/i, ''),
+          nProt,
+          dhEmi,
+          nNF,
+          vNF,
+        })
       } else {
         falhas++
       }
     }
 
-    const csv = gerarComparativoCsv(linhas)
-    const destino = path.join(pastaSaida, 'comparativo_nfce.csv')
-    fs.writeFileSync(destino, csv, 'utf-8')
+    const linhasCanceladas = linhas.filter(
+      (l) =>
+        (l.chave && canceladasPorChave.has(l.chave)) ||
+        (l.nProt && canceladasPorProtocolo.has(l.nProt))
+    )
+    const linhasAprovadas = linhas.filter(
+      (l) =>
+        !(l.chave && canceladasPorChave.has(l.chave)) &&
+        !(l.nProt && canceladasPorProtocolo.has(l.nProt))
+    )
+
+    fs.writeFileSync(path.join(pastaSaida, 'comparativo_aprovado.csv'), gerarComparativoCsv(linhasAprovadas), 'utf-8')
+    fs.writeFileSync(path.join(pastaSaida, 'comparativo_cancelamento.csv'), gerarComparativoCsv(linhasCanceladas), 'utf-8')
 
     return {
       ok: true,
-      arquivo: 'comparativo_nfce.csv',
+      arquivos: ['comparativo_aprovado.csv', 'comparativo_cancelamento.csv'],
       gerados: linhas.length,
+      aprovados: linhasAprovadas.length,
+      cancelados: linhasCanceladas.length,
       falhas,
     }
   } catch (err: unknown) {
