@@ -130,7 +130,7 @@ declare global {
         abrirPasta(caminho: string): Promise<void>
       }
       relatorio: {
-        gerarComparativoCsv(pastaSaida: string): Promise<{
+        gerarComparativoXlsx(pastaSaida: string): Promise<{
           ok: boolean
           arquivos?: string[]
           gerados?: number

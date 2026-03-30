@@ -5,6 +5,7 @@ import os from 'os'
 import { execFile, exec } from 'child_process'
 import { promisify } from 'util'
 import Store from 'electron-store'
+import ExcelJS from 'exceljs'
 import {
   listarTodasChaves,
   listarChaves,
@@ -80,17 +81,10 @@ let ignorarConfirmacaoFechamento = false
 
 type RelatorioModo = 'agora' | 'depois' | 'nenhum'
 
-/** Dados do emitente no topo do relatório (texto; CSV não guarda negrito/cor). */
+/** Dados do emitente no topo do relatório. */
 interface CabecalhoEmpresaRelatorio {
   nome?: string
   cnpj?: string
-}
-
-function escapeCsvCell(value: unknown): string {
-  const s = value == null ? '' : String(value)
-  // Mantém Excel feliz: aspas e separadores
-  if (/[;"\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
-  return s
 }
 
 function formatarCnpjRelatorioDigitos(raw: string | undefined): string {
@@ -113,27 +107,53 @@ function extrairEmitenteDoNfceXml(xmlStr: string): CabecalhoEmpresaRelatorio {
   return { nome: xNome, cnpj }
 }
 
-function gerarComparativoCsv(
+async function gerarComparativoXlsxBuffer(
   linhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string }>,
   cabecalhoEmpresa?: CabecalhoEmpresaRelatorio
-): string {
+): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('Comparativo NFC-e', {
+    views: [{ state: 'frozen', ySplit: 2 }],
+  })
+
   const nomeEmpresa = (cabecalhoEmpresa?.nome ?? '').trim() || '—'
   const cnpjFmt = formatarCnpjRelatorioDigitos(cabecalhoEmpresa?.cnpj)
-  const linhaEmpresa = [
-    escapeCsvCell(`EMPRESA : ${nomeEmpresa}`),
-    escapeCsvCell(`CNPJ ${cnpjFmt}`),
-    '',
-  ].join(';')
+  ws.mergeCells('A1:C1')
+  ws.getCell('A1').value = `EMPRESA : ${nomeEmpresa}    |    CNPJ ${cnpjFmt}`
+  ws.getCell('A1').font = { bold: true, color: { argb: 'FFB91C1C' }, size: 12 }
 
-  const headers = ['Número do documento', 'Data de emissão', 'Valor do cupom']
-  const rows = linhas.map((l) => [
-    escapeCsvCell(l.nNF ?? ''),
-    escapeCsvCell(l.dhEmi ?? ''),
-    escapeCsvCell(l.vNF ?? ''),
-  ])
-  // "sep=;" força o Excel a usar ponto-e-vírgula como delimitador
-  // BOM UTF-8 evita caracteres acentuados corrompidos no Windows/Excel.
-  return `\uFEFFsep=;\n${[linhaEmpresa, headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n')}`
+  const headerRow = ws.addRow(['Número do documento', 'Data de emissão', 'Valor do cupom'])
+  headerRow.font = { bold: true, color: { argb: 'FF111827' } }
+  headerRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFE5E7EB' },
+  }
+  headerRow.border = {
+    top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+    left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+    bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+    right: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+  }
+
+  for (const l of linhas) {
+    const row = ws.addRow([l.nNF ?? '', l.dhEmi ?? '', l.vNF ?? ''])
+    row.getCell(1).numFmt = '@'
+    row.getCell(3).numFmt = '#,##0.00'
+  }
+
+  ws.columns = [
+    { width: 24 },
+    { width: 28 },
+    { width: 18 },
+  ]
+  ws.autoFilter = {
+    from: 'A2',
+    to: 'C2',
+  }
+
+  const buffer = await wb.xlsx.writeBuffer()
+  return Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer)
 }
 
 function isEventoCancelamento(xmlStr: string): boolean {
@@ -966,15 +986,15 @@ ipcMain.handle(
       if (relatorioModo === 'agora') {
         const linhasAprovadas = relatorioLinhas.filter((l) => !l.cancelada)
         const linhasCanceladas = relatorioLinhas.filter((l) => l.cancelada)
-        const csvAprovado = gerarComparativoCsv(linhasAprovadas, cabecalhoEmpresaRelatorio)
-        const csvCancelamento = gerarComparativoCsv(linhasCanceladas, cabecalhoEmpresaRelatorio)
-        fs.writeFileSync(path.join(pastaSaida, 'comparativo_aprovado.csv'), csvAprovado, 'utf-8')
-        fs.writeFileSync(path.join(pastaSaida, 'comparativo_cancelamento.csv'), csvCancelamento, 'utf-8')
+        const xlsxAprovado = await gerarComparativoXlsxBuffer(linhasAprovadas, cabecalhoEmpresaRelatorio)
+        const xlsxCancelamento = await gerarComparativoXlsxBuffer(linhasCanceladas, cabecalhoEmpresaRelatorio)
+        fs.writeFileSync(path.join(pastaSaida, 'comparativo_aprovado.xlsx'), xlsxAprovado)
+        fs.writeFileSync(path.join(pastaSaida, 'comparativo_cancelamento.xlsx'), xlsxCancelamento)
         return {
           ok: true,
           resultados,
           relatorio: {
-            arquivos: ['comparativo_aprovado.csv', 'comparativo_cancelamento.csv'],
+            arquivos: ['comparativo_aprovado.xlsx', 'comparativo_cancelamento.xlsx'],
             gerados: relatorioLinhas.length,
             aprovados: linhasAprovadas.length,
             cancelados: linhasCanceladas.length,
@@ -1039,7 +1059,7 @@ ipcMain.handle('fs:abrir-pasta', async (_e, caminho: string) => {
 })
 
 // ---------------------------------------------------------------------------
-// IPC — Relatório interno (CSV comparativo)
+// IPC — Relatório interno (XLSX comparativo)
 // ---------------------------------------------------------------------------
 
 function extrairRelatorioDoXml(xmlStr: string): { chave?: string; nProt?: string; dhEmi?: string; nNF?: string; vNF?: string } {
@@ -1051,7 +1071,7 @@ function extrairRelatorioDoXml(xmlStr: string): { chave?: string; nProt?: string
   return { chave, nProt, dhEmi, nNF, vNF }
 }
 
-ipcMain.handle('relatorio:comparativo-csv', async (_e, pastaSaida: string) => {
+ipcMain.handle('relatorio:comparativo-xlsx', async (_e, pastaSaida: string) => {
   try {
     if (!pastaSaida) throw new Error('Pasta de destino não informada.')
     if (!fs.existsSync(pastaSaida)) throw new Error('Pasta de destino não encontrada.')
@@ -1122,12 +1142,14 @@ ipcMain.handle('relatorio:comparativo-csv', async (_e, pastaSaida: string) => {
         !(l.nProt && canceladasPorProtocolo.has(l.nProt))
     )
 
-    fs.writeFileSync(path.join(pastaSaida, 'comparativo_aprovado.csv'), gerarComparativoCsv(linhasAprovadas, cabecalhoEmpresa), 'utf-8')
-    fs.writeFileSync(path.join(pastaSaida, 'comparativo_cancelamento.csv'), gerarComparativoCsv(linhasCanceladas, cabecalhoEmpresa), 'utf-8')
+    const xlsxAprovado = await gerarComparativoXlsxBuffer(linhasAprovadas, cabecalhoEmpresa)
+    const xlsxCancelamento = await gerarComparativoXlsxBuffer(linhasCanceladas, cabecalhoEmpresa)
+    fs.writeFileSync(path.join(pastaSaida, 'comparativo_aprovado.xlsx'), xlsxAprovado)
+    fs.writeFileSync(path.join(pastaSaida, 'comparativo_cancelamento.xlsx'), xlsxCancelamento)
 
     return {
       ok: true,
-      arquivos: ['comparativo_aprovado.csv', 'comparativo_cancelamento.csv'],
+      arquivos: ['comparativo_aprovado.xlsx', 'comparativo_cancelamento.xlsx'],
       gerados: linhas.length,
       aprovados: linhasAprovadas.length,
       cancelados: linhasCanceladas.length,

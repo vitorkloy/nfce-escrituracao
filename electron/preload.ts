@@ -70,8 +70,8 @@ contextBridge.exposeInMainWorld('electron', {
   },
 
   relatorio: {
-    gerarComparativoCsv: (pastaSaida: string) =>
-      ipcRenderer.invoke('relatorio:comparativo-csv', pastaSaida),
+    gerarComparativoXlsx: (pastaSaida: string) =>
+      ipcRenderer.invoke('relatorio:comparativo-xlsx', pastaSaida),
     listarXmls: (pastaSaida: string) =>
       ipcRenderer.invoke('relatorio:listar-xmls', pastaSaida),
   },

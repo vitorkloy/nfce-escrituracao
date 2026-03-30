@@ -216,7 +216,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
         if (relatorioModo === 'agora' && resultado.relatorio?.arquivos?.length) {
           const aprovados = resultado.relatorio.aprovados ?? 0
           const cancelados = resultado.relatorio.cancelados ?? 0
-          showToast('ok', `Relatórios CSV gerados (${aprovados} aprovados, ${cancelados} cancelados).`)
+          showToast('ok', `Relatórios XLSX gerados (${aprovados} aprovados, ${cancelados} cancelados).`)
         }
       } else {
         const firstError = (failed[0]?.erro ?? 'Erro desconhecido').slice(0, 150)
@@ -483,7 +483,7 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
         <div className="fixed inset-0 z-[250] bg-black/60 flex items-center justify-center no-drag">
           <div className="w-full max-w-[560px] rounded bg-[var(--bg-surface)] border border-[var(--border)] p-4">
             <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">
-              Gerar relatório CSV agora ou depois?
+              Gerar relatório XLSX agora ou depois?
             </h3>
             <p className="text-xs text-[var(--text-secondary)] mb-4">
               Você está iniciando um download em lote. O relatório interno usa os XMLs baixados.
@@ -493,8 +493,8 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
             <div className="text-xs text-[var(--text-muted)] mb-4">
               <p className="mb-1">
                 <span className="font-semibold text-[var(--text-primary)]">Gerar agora</span>: cria{" "}
-                <span className="font-mono">comparativo_aprovado.csv</span> e{" "}
-                <span className="font-mono">comparativo_cancelamento.csv</span> na pasta escolhida.
+                <span className="font-mono">comparativo_aprovado.xlsx</span> e{" "}
+                <span className="font-mono">comparativo_cancelamento.xlsx</span> na pasta escolhida.
               </p>
               <p>
                 <span className="font-semibold text-[var(--text-primary)]">Gerar depois</span>: você gera na aba{" "}

@@ -55,7 +55,7 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
     }
   }
 
-  async function gerarCsv() {
+  async function gerarXlsx() {
     if (!isElectron) {
       showToast('erro', 'Funcionalidade disponível apenas no aplicativo desktop.')
       return
@@ -67,9 +67,9 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
 
     setIsGerando(true)
     try {
-      const resp = await window.electron.relatorio.gerarComparativoCsv(pasta)
+      const resp = await window.electron.relatorio.gerarComparativoXlsx(pasta)
       if (!resp.ok) {
-        showToast('erro', resp.xMotivo ?? 'Falha ao gerar o CSV.')
+        showToast('erro', resp.xMotivo ?? 'Falha ao gerar o XLSX.')
         return
       }
 
@@ -85,7 +85,7 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
           : `Relatórios gerados com sucesso (${aprovados} aprovados, ${cancelados} cancelados).`
       )
     } catch (err) {
-      showToast('erro', err instanceof Error ? err.message : 'Erro ao gerar CSV.')
+      showToast('erro', err instanceof Error ? err.message : 'Erro ao gerar XLSX.')
     } finally {
       setIsGerando(false)
     }
@@ -95,7 +95,7 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
     <div className="fade-in flex flex-col h-full">
       <div className="p-6 pb-4 border-b border-[var(--border)]">
         <h2 className="text-xl font-semibold mb-4 text-[var(--text-primary)]">
-          Relatório interno (CSV)
+          Relatório interno (XLSX)
         </h2>
 
         <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -113,11 +113,11 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
           </button>
           <button
             type="button"
-            onClick={gerarCsv}
+            onClick={gerarXlsx}
             disabled={isGerando || !pasta}
             className="flex items-center justify-center px-5 py-2.5 rounded text-sm font-semibold no-drag bg-[var(--teal-glow)] border border-[var(--teal-dim)] text-[var(--teal)] disabled:opacity-60"
           >
-            {isGerando ? 'Gerando...' : 'Gerar CSV'}
+            {isGerando ? 'Gerando...' : 'Gerar XLSX'}
           </button>
         </div>
 
@@ -206,8 +206,8 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
 
       <div className="flex-1 overflow-auto p-6">
         <p className="text-sm text-[var(--text-muted)]">
-          Serão gerados os arquivos <span className="font-mono">comparativo_aprovado.csv</span> e{' '}
-          <span className="font-mono">comparativo_cancelamento.csv</span> dentro da pasta selecionada.
+          Serão gerados os arquivos <span className="font-mono">comparativo_aprovado.xlsx</span> e{' '}
+          <span className="font-mono">comparativo_cancelamento.xlsx</span> dentro da pasta selecionada.
         </p>
       </div>
     </div>

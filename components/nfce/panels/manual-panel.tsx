@@ -34,7 +34,7 @@ export function ManualPanel() {
           <li>Selecione as chaves desejadas.</li>
           <li>Clique em <strong>Baixar XMLs</strong>.</li>
           <li>Escolha a pasta de destino.</li>
-          <li>No modal, selecione se o relatório CSV deve ser gerado <strong>agora</strong> ou <strong>depois</strong>.</li>
+          <li>No modal, selecione se o relatório XLSX deve ser gerado <strong>agora</strong> ou <strong>depois</strong>.</li>
         </ul>
       </section>
 
@@ -48,14 +48,14 @@ export function ManualPanel() {
       </section>
 
       <section className="mb-5 rounded border border-[var(--border)] bg-[var(--bg-surface)] p-4">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">5) Gerar relatório interno (CSV)</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">5) Gerar relatório interno (XLSX)</h3>
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
           <li>Vá para a aba <strong>Relatório</strong>.</li>
           <li>Selecione a pasta onde os `*_nfce.xml` estão salvos.</li>
           <li>Veja a prévia dos arquivos e o total encontrado.</li>
           <li>
-            Clique em <strong>Gerar CSV</strong> para criar `comparativo_aprovado.csv` e
-            `comparativo_cancelamento.csv`.
+            Clique em <strong>Gerar XLSX</strong> para criar `comparativo_aprovado.xlsx` e
+            `comparativo_cancelamento.xlsx`.
           </li>
         </ul>
       </section>
@@ -65,10 +65,10 @@ export function ManualPanel() {
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
           <li>Não feche o app durante buscas ou downloads em andamento.</li>
           <li>
-            O CSV inclui uma linha inicial com <strong>EMPRESA</strong> e <strong>CNPJ</strong> (extraídos do XML)
-            e, em seguida, as colunas número do documento, data de emissão e valor do cupom.
+            O XLSX inclui uma linha inicial com <strong>EMPRESA</strong> e <strong>CNPJ</strong> (extraídos do XML),
+            cabeçalho estilizado e colunas número do documento, data de emissão e valor do cupom.
           </li>
-          <li>Para evitar problemas no Excel, abra o CSV preferencialmente como UTF-8.</li>
+          <li>O arquivo já abre formatado no Excel, sem precisar importar como texto.</li>
         </ul>
       </section>
     </div>
