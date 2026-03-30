@@ -31,7 +31,7 @@ function embutirNfeDadosMsgCdata(xmlCorpo: string): string {
 }
 
 /**
- * nfeDadosMsg: WSDL document/literal com xs:any — XML filho dentro de CDATA.
+ * Recepção de evento: CDATA evita quebrar o envelope se o XML colado tiver &, <, etc.
  */
 function soapEnvelopeNfeDadosMsg(wsdlServiceId: string, xmlCorpo: string): string {
   const payload = embutirNfeDadosMsgCdata(xmlCorpo)
@@ -43,8 +43,12 @@ function soapEnvelopeNfeDadosMsg(wsdlServiceId: string, xmlCorpo: string): strin
 </soap12:Envelope>`
 }
 
+/**
+ * Distribuição DFe: o `distDFeInt` deve ir como XML filho literal de nfeDadosMsg.
+ * CDATA aqui faz a SEFAZ tratar o lote como texto e pode retornar cStat 243 (XML mal formado).
+ */
 function soapEnvelopeDistribuicaoDFe(nfeDadosMsgInnerXml: string): string {
-  const payload = embutirNfeDadosMsgCdata(nfeDadosMsgInnerXml)
+  const payload = (nfeDadosMsgInnerXml ?? '').trim()
   return `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
   <soap12:Body>

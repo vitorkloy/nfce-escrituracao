@@ -149,7 +149,7 @@ Este app também chama **NFeDistribuicaoDFe** na AN para distribuição por **NS
 - **Sempre produção** neste projeto: endpoint `www1.nfe.fazenda.gov.br` e `tpAmb=1` no XML `distDFeInt`. O seletor Homologação/Produção da interface vale para os **webservices NFC-e de São Paulo** acima; **não** altera a Distribuição DFe.
 - Respostas usuais: `137` (lote com até 50 `docZip`), `138` (sem novos documentos). **`656`** = consumo indevido (NSU incorreto ou frequência excessiva; costuma exigir espera ~1 h).
 - Não substitui listagem por período (`NFCeListagemChaves`); o conjunto de documentos segue as regras da AN para NF-e/DF-e.
-- O XML enviado em `nfeDadosMsg` é colocado em **CDATA** no envelope SOAP (também em **NFeRecepcaoEvento4**), para caracteres como `&` e `<` não quebrarem a mensagem.
+- **NFeRecepcaoEvento4:** o conteúdo de `nfeDadosMsg` é envolvido em **CDATA** no SOAP (XML colado pode ter `&`, `<`, etc.). **NFeDistribuicaoDFe:** o `distDFeInt` vai **sem CDATA**, como filho XML literal, para evitar rejeição **243** (XML mal formado) na validação da AN.
 
 ### NFeRecepcaoEvento4 (Ambiente Nacional — NF-e)
 
