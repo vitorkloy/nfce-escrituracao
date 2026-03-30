@@ -59,11 +59,57 @@ interface ResultadoDownload {
   eventos?: EventoProc[]
 }
 
+interface NfeSoapResumoRecepcao {
+  cStat: string
+  xMotivo: string
+  idLote?: string
+  tpAmb?: string
+}
+
+interface NfeSoapResumoDistribuicao {
+  cStat: string
+  xMotivo: string
+  ultNSU: string
+  maxNSU: string
+}
+
 interface NfeSoapResultado {
   ok: boolean
   /** XML bruto da resposta SOAP (envelope ou retorno). */
   xmlResposta?: string
   xMotivo?: string
+  /** Preenchido quando a resposta contém retEnvEvento interpretável. */
+  resumoRecepcao?: NfeSoapResumoRecepcao
+  /** Preenchido quando a resposta contém retDistDFeInt interpretável. */
+  resumoDistribuicao?: NfeSoapResumoDistribuicao
+}
+
+interface NfeDistDfeSyncProgresso {
+  tipo: 'lote' | 'concluido' | 'erro'
+  ultNSU?: string
+  maxNSU?: string
+  cStat?: string
+  loteSalvos?: number
+  loteIgnorados?: number
+  totalSalvos?: number
+  totalIgnorados?: number
+  mensagem?: string
+}
+
+interface NfeDistDfeSyncResultado {
+  ok: boolean
+  totalSalvos: number
+  totalIgnorados: number
+  ultNSU: string
+  lotes: number
+  xMotivo?: string
+}
+
+interface NfeXmlSalvoInfo {
+  chave: string
+  caminho: string
+  ano: string
+  mes: string
 }
 
 interface ProgressoLote {
@@ -135,11 +181,23 @@ declare global {
       nfe: {
         distribuicaoDfe(config: SefazConfig, nfeDadosMsgXml: string): Promise<NfeSoapResultado>
         recepcaoEvento(config: SefazConfig, nfeDadosMsgXml: string): Promise<NfeSoapResultado>
+        distDfeEstado(pastaRaiz: string, cnpj14: string): Promise<{ ok: boolean; ultNSU?: string; xMotivo?: string }>
+        syncDistDfe(
+          config: SefazConfig,
+          opts: { pastaRaiz: string; cnpj14: string; cUFAutor: string; reiniciarNsu: boolean }
+        ): Promise<NfeDistDfeSyncResultado>
+        listarXmlsSalvos(
+          pastaRaiz: string,
+          cnpj14: string,
+          filtro?: { ano?: string; mes?: string }
+        ): Promise<{ ok: boolean; arquivos?: NfeXmlSalvoInfo[]; total?: number; xMotivo?: string }>
+        onSyncDistProgress(cb: (p: NfeDistDfeSyncProgresso) => void): () => void
       }
       fs: {
         selecionarPasta(): Promise<string | null>
         salvarXml(conteudo: string, nomeArquivo: string): Promise<boolean>
         abrirPasta(caminho: string): Promise<void>
+        lerArquivoUtf8(caminho: string): Promise<{ ok: boolean; conteudo?: string; xMotivo?: string }>
       }
       relatorio: {
         gerarComparativoXlsx(pastaSaida: string): Promise<{

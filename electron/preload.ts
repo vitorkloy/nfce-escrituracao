@@ -68,12 +68,39 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('nfe:distribuicao-dfe', config, nfeDadosMsgXml),
     recepcaoEvento: (config: ConfigCert & { thumbprint?: string }, nfeDadosMsgXml: string) =>
       ipcRenderer.invoke('nfe:recepcao-evento', config, nfeDadosMsgXml),
+    distDfeEstado: (pastaRaiz: string, cnpj14: string) =>
+      ipcRenderer.invoke('nfe:dist-dfe-estado', pastaRaiz, cnpj14),
+    syncDistDfe: (
+      config: ConfigCert & { thumbprint?: string },
+      opts: { pastaRaiz: string; cnpj14: string; cUFAutor: string; reiniciarNsu: boolean }
+    ) => ipcRenderer.invoke('nfe:sync-dist-dfe', config, opts),
+    listarXmlsSalvos: (
+      pastaRaiz: string,
+      cnpj14: string,
+      filtro?: { ano?: string; mes?: string }
+    ) => ipcRenderer.invoke('nfe:listar-xmls-salvos', pastaRaiz, cnpj14, filtro),
+    onSyncDistProgress: (cb: (p: {
+      tipo: 'lote' | 'concluido' | 'erro'
+      ultNSU?: string
+      maxNSU?: string
+      cStat?: string
+      loteSalvos?: number
+      loteIgnorados?: number
+      totalSalvos?: number
+      totalIgnorados?: number
+      mensagem?: string
+    }) => void) => {
+      const fn = (_e: Electron.IpcRendererEvent, p: Parameters<typeof cb>[0]) => cb(p)
+      ipcRenderer.on('nfe:sync-dist-progress', fn)
+      return () => ipcRenderer.removeListener('nfe:sync-dist-progress', fn)
+    },
   },
 
   fs: {
     selecionarPasta:  ()                                => ipcRenderer.invoke('fs:selecionar-pasta'),
     salvarXml:        (c: string, n: string)            => ipcRenderer.invoke('fs:salvar-xml', c, n),
     abrirPasta:       (caminho: string)                 => ipcRenderer.invoke('fs:abrir-pasta', caminho),
+    lerArquivoUtf8:   (caminho: string)                 => ipcRenderer.invoke('fs:ler-arquivo-utf8', caminho),
   },
 
   relatorio: {

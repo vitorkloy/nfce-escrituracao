@@ -77,11 +77,12 @@ export function ManualPanel() {
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
           <li>Não feche o app durante buscas ou downloads em andamento.</li>
           <li>
-            No módulo <strong>NF-e</strong> há só <strong>NFeDistribuicaoDFe</strong> e{' '}
-            <strong>NFeRecepcaoEvento4</strong> (produção AN). Em <strong>Distribuição DFe</strong>, o{' '}
-            <strong>Modo 1 — Listagem</strong> monta o <code className="text-[11px]">distDFeInt</code> com{' '}
-            <code className="text-[11px]">distNSU/ultNSU</code> (primeira consulta com NSU zero; até 50 XMLs por retorno).
-            Também é possível enviar XML livre. Em <strong>Recepção evento</strong>, cole o XML do lote de eventos.
+            No módulo <strong>NF-e</strong> há <strong>NFeDistribuicaoDFe</strong> e{' '}
+            <strong>NFeRecepcaoEvento4</strong> (produção AN). Em <strong>Distribuição DFe</strong>, use{' '}
+            <strong>Sincronização automática</strong> para baixar XMLs em loop (NSU), gravar em{' '}
+            <code className="text-[11px]">pasta/CNPJ/ano/mês/chave.xml</code>, pular arquivos já existentes e guardar o
+            último NSU em <code className="text-[11px]">.nfe-dist-state.json</code>. Há também consulta única por NSU, XML
+            livre e a aba <strong>Arquivos salvos</strong> para listar e abrir XMLs locais.
           </li>
           <li>
             O XLSX inclui uma linha inicial com <strong>EMPRESA</strong> e <strong>CNPJ</strong> (extraídos do XML),

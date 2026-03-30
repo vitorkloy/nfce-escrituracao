@@ -18,6 +18,12 @@ export function NfeRecepcaoEventoPanel({ certificateState, showToast }: NfeRecep
   const { isElectron } = useIsElectron()
   const [xml, setXml] = useState('')
   const [resposta, setResposta] = useState<string | null>(null)
+  const [resumo, setResumo] = useState<{
+    cStat: string
+    xMotivo: string
+    idLote?: string
+    tpAmb?: string
+  } | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
   async function enviar() {
@@ -33,6 +39,7 @@ export function NfeRecepcaoEventoPanel({ certificateState, showToast }: NfeRecep
 
     setIsLoading(true)
     setResposta(null)
+    setResumo(null)
     try {
       const resp = await window.electron.nfe.recepcaoEvento(certificateState as never, xml.trim())
       if (!resp.ok) {
@@ -40,7 +47,12 @@ export function NfeRecepcaoEventoPanel({ certificateState, showToast }: NfeRecep
         return
       }
       setResposta(resp.xmlResposta ?? '')
-      showToast('ok', 'Resposta recebida da SEFAZ.')
+      const r = resp.resumoRecepcao
+      setResumo(r ?? null)
+      showToast(
+        'ok',
+        r ? `SEFAZ: [${r.cStat}] ${r.xMotivo || 'OK'}${r.idLote ? ` · lote ${r.idLote}` : ''}` : 'Resposta recebida da SEFAZ.',
+      )
     } catch (err) {
       showToast('erro', err instanceof Error ? err.message : 'Erro ao chamar Recepção de Evento.')
     } finally {
@@ -54,8 +66,10 @@ export function NfeRecepcaoEventoPanel({ certificateState, showToast }: NfeRecep
         <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-1">NFeRecepcaoEvento4</h2>
         <p className="text-xs text-[var(--text-muted)]">{ENDPOINT_INFO}</p>
         <p className="text-xs text-[var(--text-secondary)] mt-2">
-          Cole apenas o XML que vai dentro de <code className="text-[11px]">nfeDadosMsg</code> (lote de eventos),
-          sem o envelope SOAP.
+          Cole apenas o XML que vai dentro de <code className="text-[11px]">nfeDadosMsg</code> (lote de eventos,
+          ex. <code className="text-[11px]">envEvento</code>), sem o envelope SOAP. O app envolve o conteúdo em{' '}
+          <code className="text-[11px]">CDATA</code> na chamada para evitar erro com <code className="text-[11px]">&amp;</code> ou{' '}
+          <code className="text-[11px]">&lt;</code> no XML.
         </p>
       </div>
 
@@ -84,9 +98,21 @@ export function NfeRecepcaoEventoPanel({ certificateState, showToast }: NfeRecep
         </button>
       </div>
 
+      {resumo !== null && (
+        <div className={`p-3 ${SURFACE_CARD_CLASS} border-l-2 border-[var(--teal-dim)]`}>
+          <p className="text-[10px] uppercase text-[var(--text-muted)] mb-1">retEnvEvento (resumo)</p>
+          <p className="text-sm text-[var(--text-primary)]">
+            <strong>cStat {resumo.cStat}</strong>
+            {resumo.tpAmb != null && resumo.tpAmb !== '' ? ` · tpAmb ${resumo.tpAmb}` : ''}
+            {resumo.idLote != null && resumo.idLote !== '' ? ` · idLote ${resumo.idLote}` : ''}
+          </p>
+          <p className="text-xs text-[var(--text-secondary)] mt-1">{resumo.xMotivo || '—'}</p>
+        </div>
+      )}
+
       {resposta !== null && (
         <div className={`p-4 ${SURFACE_CARD_CLASS} flex-1 min-h-0 flex flex-col`}>
-          <p className="text-xs text-[var(--text-muted)] mb-2">Resposta (XML)</p>
+          <p className="text-xs text-[var(--text-muted)] mb-2">Resposta (XML bruto SOAP)</p>
           <pre className="text-xs font-mono whitespace-pre-wrap break-all overflow-auto max-h-[420px] text-[var(--text-primary)]">
             {resposta || '—'}
           </pre>

@@ -19,6 +19,14 @@ import {
   type ResultadoDownload,
 } from './sefaz'
 import { nfeDistDFeInteresse, nfeRecepcaoEventoNF } from './nfe'
+import { extrairXmlRetDistDfeInt, parsearRetDistDfeInt } from './nfe-dist-dfe-parser'
+import {
+  extrairXmlNfeRecepcaoEventoResult,
+  parsearRetEnvEvento,
+} from './nfe-recepcao-evento-parser'
+import { sincronizarDistDfeNfe, carregarUltNsu } from './nfe-dist-dfe-sync'
+import type { NfeDistDfeSyncProgresso } from './nfe-dist-dfe-sync'
+import { listarXmlsNfeSalvos, type NfeXmlSalvoInfo } from './nfe-list-xmls-local'
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
@@ -312,6 +320,12 @@ process.on('unhandledRejection', (reason) => {
 function getWindow(): BrowserWindow {
   if (!mainWindow) throw new Error('Janela principal não está disponível.')
   return mainWindow
+}
+
+function enviarProgressoSyncDistDfe(p: NfeDistDfeSyncProgresso): void {
+  const w = mainWindow
+  if (!w || w.isDestroyed()) return
+  w.webContents.send('nfe:sync-dist-progress', p)
 }
 
 // ---------------------------------------------------------------------------
@@ -1046,7 +1060,22 @@ ipcMain.handle(
       const cfg = { ...config, pfxPath, senha: resolved.senha }
       const agente = criarAgente(cfg.pfxPath, cfg.senha)
       const xmlResposta = await nfeDistDFeInteresse(cfg, xml, agente)
-      return { ok: true, xmlResposta }
+      let resumoDistribuicao:
+        | { cStat: string; xMotivo: string; ultNSU: string; maxNSU: string }
+        | undefined
+      try {
+        const inner = extrairXmlRetDistDfeInt(xmlResposta)
+        const p = parsearRetDistDfeInt(inner)
+        resumoDistribuicao = {
+          cStat: p.cStat,
+          xMotivo: p.xMotivo,
+          ultNSU: p.ultNSU,
+          maxNSU: p.maxNSU,
+        }
+      } catch {
+        resumoDistribuicao = undefined
+      }
+      return { ok: true, xmlResposta, resumoDistribuicao }
     } catch (err: unknown) {
       return { ok: false, xMotivo: mensagemErro(err) }
     } finally {
@@ -1069,9 +1098,107 @@ ipcMain.handle(
       const cfg = { ...config, pfxPath, senha: resolved.senha }
       const agente = criarAgente(cfg.pfxPath, cfg.senha)
       const xmlResposta = await nfeRecepcaoEventoNF(cfg, xml, agente)
-      return { ok: true, xmlResposta }
+      let resumoRecepcao:
+        | { cStat: string; xMotivo: string; idLote?: string; tpAmb?: string }
+        | undefined
+      try {
+        const inner = extrairXmlNfeRecepcaoEventoResult(xmlResposta)
+        const r = parsearRetEnvEvento(inner)
+        resumoRecepcao = {
+          cStat: r.cStat,
+          xMotivo: r.xMotivo,
+          idLote: r.idLote,
+          tpAmb: r.tpAmb,
+        }
+      } catch {
+        resumoRecepcao = undefined
+      }
+      return { ok: true, xmlResposta, resumoRecepcao }
     } catch (err: unknown) {
       return { ok: false, xMotivo: mensagemErro(err) }
+    } finally {
+      if (tmpCriado && pfxPath) limparPfxTemp(pfxPath)
+    }
+  }
+)
+
+ipcMain.handle(
+  'nfe:dist-dfe-estado',
+  (_e, pastaRaiz: string, cnpj14: string) => {
+    try {
+      const pr = String(pastaRaiz ?? '').trim()
+      const cj = String(cnpj14 ?? '').replace(/\D/g, '')
+      if (!pr || cj.length !== 14) return { ok: false, xMotivo: 'Pasta ou CNPJ inválido.' }
+      return { ok: true, ultNSU: carregarUltNsu(pr, cj) }
+    } catch (err: unknown) {
+      return { ok: false, xMotivo: mensagemErro(err) }
+    }
+  }
+)
+
+ipcMain.handle(
+  'nfe:listar-xmls-salvos',
+  (
+    _e,
+    pastaRaiz: string,
+    cnpj14: string,
+    filtro?: { ano?: string; mes?: string }
+  ) => {
+    try {
+      const pr = String(pastaRaiz ?? '').trim()
+      const cj = String(cnpj14 ?? '').replace(/\D/g, '')
+      if (!pr || cj.length !== 14) return { ok: false, arquivos: [] as NfeXmlSalvoInfo[], xMotivo: 'Pasta ou CNPJ inválido.' }
+      const arquivos = listarXmlsNfeSalvos(pr, cj, filtro)
+      return { ok: true, arquivos, total: arquivos.length }
+    } catch (err: unknown) {
+      return { ok: false, arquivos: [], xMotivo: mensagemErro(err) }
+    }
+  }
+)
+
+ipcMain.handle(
+  'nfe:sync-dist-dfe',
+  async (
+    _e,
+    config: ConfigCert & { thumbprint?: string },
+    opts: { pastaRaiz: string; cnpj14: string; cUFAutor: string; reiniciarNsu: boolean }
+  ) => {
+    let pfxPath = ''
+    let tmpCriado = false
+    try {
+      const pastaRaiz = String(opts?.pastaRaiz ?? '').trim()
+      const cnpj14 = String(opts?.cnpj14 ?? '').replace(/\D/g, '')
+      const cUFAutor = String(opts?.cUFAutor ?? '').replace(/\D/g, '')
+      if (!pastaRaiz) return { ok: false, totalSalvos: 0, totalIgnorados: 0, ultNSU: '', lotes: 0, xMotivo: 'Selecione a pasta raiz de armazenamento.' }
+      if (cnpj14.length !== 14) return { ok: false, totalSalvos: 0, totalIgnorados: 0, ultNSU: '', lotes: 0, xMotivo: 'CNPJ com 14 dígitos é obrigatório.' }
+      if (!/^\d{2}$/.test(cUFAutor)) {
+        return { ok: false, totalSalvos: 0, totalIgnorados: 0, ultNSU: '', lotes: 0, xMotivo: 'cUFAutor inválido.' }
+      }
+
+      const resolved = await resolverPfx(config)
+      pfxPath = resolved.pfxPath
+      tmpCriado = resolved.tmpCriado
+      const cfg = { ...config, pfxPath, senha: resolved.senha }
+      const agente = criarAgente(cfg.pfxPath, cfg.senha)
+
+      return await sincronizarDistDfeNfe({
+        config: cfg,
+        agente,
+        pastaRaiz,
+        cnpj14,
+        cUFAutor,
+        reiniciarNsu: Boolean(opts?.reiniciarNsu),
+        onProgress: enviarProgressoSyncDistDfe,
+      })
+    } catch (err: unknown) {
+      return {
+        ok: false,
+        totalSalvos: 0,
+        totalIgnorados: 0,
+        ultNSU: '',
+        lotes: 0,
+        xMotivo: mensagemErro(err),
+      }
     } finally {
       if (tmpCriado && pfxPath) limparPfxTemp(pfxPath)
     }
@@ -1120,6 +1247,25 @@ ipcMain.handle('fs:abrir-pasta', async (_e, caminho: string) => {
     await shell.openPath(caminho)
   } catch (err) {
     console.warn('[Main] Falha ao abrir pasta:', err)
+  }
+})
+
+const LER_ARQUIVO_MAX_BYTES = 2 * 1024 * 1024
+
+ipcMain.handle('fs:ler-arquivo-utf8', async (_e, caminhoArquivo: string) => {
+  try {
+    const p = path.resolve(String(caminhoArquivo ?? ''))
+    if (!fs.existsSync(p) || !fs.statSync(p).isFile()) {
+      return { ok: false, xMotivo: 'Arquivo não encontrado.' }
+    }
+    const st = fs.statSync(p)
+    if (st.size > LER_ARQUIVO_MAX_BYTES) {
+      return { ok: false, xMotivo: 'Arquivo excede o limite de leitura (2 MB).' }
+    }
+    const conteudo = fs.readFileSync(p, 'utf-8')
+    return { ok: true, conteudo }
+  } catch (err: unknown) {
+    return { ok: false, xMotivo: mensagemErro(err) }
   }
 })
 

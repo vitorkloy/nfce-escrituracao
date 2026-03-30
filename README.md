@@ -142,6 +142,20 @@ Selecione o arquivo manualmente. **Senha obrigatória** — use o botão Verific
 | NFCeListagemChaves | `homologacao.nfce.fazenda.sp.gov.br/ws/...` | `nfce.fazenda.sp.gov.br/ws/...` |
 | NFCeDownloadXML | `homologacao.nfce.fazenda.sp.gov.br/ws/...` | `nfce.fazenda.sp.gov.br/ws/...` |
 
+### NFeDistribuicaoDFe (Ambiente Nacional — NF-e)
+
+Este app também chama **NFeDistribuicaoDFe** na AN para distribuição por **NSU** (documentos autoriz para o CNPJ).
+
+- **Sempre produção** neste projeto: endpoint `www1.nfe.fazenda.gov.br` e `tpAmb=1` no XML `distDFeInt`. O seletor Homologação/Produção da interface vale para os **webservices NFC-e de São Paulo** acima; **não** altera a Distribuição DFe.
+- Respostas usuais: `137` (lote com até 50 `docZip`), `138` (sem novos documentos). **`656`** = consumo indevido (NSU incorreto ou frequência excessiva; costuma exigir espera ~1 h).
+- Não substitui listagem por período (`NFCeListagemChaves`); o conjunto de documentos segue as regras da AN para NF-e/DF-e.
+- O XML enviado em `nfeDadosMsg` é colocado em **CDATA** no envelope SOAP (também em **NFeRecepcaoEvento4**), para caracteres como `&` e `<` não quebrarem a mensagem.
+
+### NFeRecepcaoEvento4 (Ambiente Nacional — NF-e)
+
+- Produção: `www.nfe.fazenda.gov.br/NFeRecepcaoEvento4`. Operação `nfeRecepcaoEventoNF`, **SOAP 1.2**, igual ao WSDL oficial.
+- O painel interpreta `retEnvEvento` quando possível (`cStat`, `xMotivo`, `idLote`) e ainda exibe o SOAP bruto.
+
 **Limites:**
 - Máximo **2.000 chaves** por consulta (app pagina automaticamente com `cStat 101`)
 - Máximo **100 dias** de histórico
