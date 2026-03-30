@@ -1,0 +1,87 @@
+Página de URLs dos Web Services:
+https://portal.fazenda.sp.gov.br/servicos/nfe/Paginas/URL-WEBSERVICES.aspx
+Texto da página:
+URLs dos Web Services
+Endereços dos Web Services disponibilizados pela SEFAZ/SP
+Ambiente de homologação externa
+​Serviço	Versão​	URL​
+​NfeInutilizacao
+4.0​0
+​https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeinutilizacao4.asmx
+​NfeConsultaProtocolo
+​4.00	https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx
+NfeStatusServico​
+​4.00	https://homologacao.nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx
+NfeConsultaCadastro​
+​4.00	https://homologacao.nfe.fazenda.sp.gov.br/ws/cadconsultacadastro4.asmx​
+​RecepcaoEvento
+​4.00	​https://homologacao.nfe.fazenda.sp.gov.br/ws/nferecepcaoevento4.asmx
+​NFeAutorizacao
+​4.00	​https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeautorizacao4.asmx
+NFeRetAutorizacao​
+​4.00	​https://homologacao.nfe.fazenda.sp.gov.br/ws/nferetautorizacao4.asmx
+
+Ambiente de produção com validade jurídica
+​Serviço
+Versão​
+URL​​​
+​​NfeInutilizacao
+4.0​0	https://nfe.fazenda.sp.gov.br/ws/nfeinutilizacao4.asmx
+​NfeConsultaProtocolo
+​4.00
+https://nfe.fazenda.sp.gov.br/ws/nfeconsultaprotocolo4.asmx
+NfeStatusServico​
+​4.00	https://nfe.fazenda.sp.gov.br/ws/nfestatusservico4.asmx
+NfeConsultaCadastro​
+​4.00	https://nfe.fazenda.sp.gov.br/ws/cadconsultacadastro4.asmx
+​RecepcaoEvento
+​4.00	https://nfe.fazenda.sp.gov.br/ws/nferecepcaoevento4.asmx​
+​NFeAutorizacao
+​4.00	https://nfe.fazenda.sp.gov.br/ws/nfeautorizacao4.asmx​
+NFeRetAutorizacao​
+​4.00	https://nfe.fazenda.sp.gov.br/ws/nferetautorizacao4.asmx​
+
+Endereço dos Web Services disponibilizados pela SEFAZ Virtual de Contingência Ambiente Nacional - (SVC-AN)
+Ambiente de homologação externa
+​Serviço	Versão​	URL​
+NfeConsultaProtocolo​
+4.00​	https://hom.svc.fazenda.gov.br/NFeConsultaProtocolo4/NFeConsultaProtocolo4.asmx
+​NfeStatusServico
+4.00​	https://hom.svc.fazenda.gov.br/NFeStatusServico4/NFeStatusServico4.asmx
+​RecepcaoEvento
+4.00​	https://hom.svc.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx
+​NFeAutorizacao
+4.00​	https://hom.svc.fazenda.gov.br/NFeAutorizacao4/NFeAutorizacao4.asmx          
+​NFeRetAutorizacao
+4.00​	https://hom.svc.fazenda.gov.br/NFeRetAutorizacao4/NFeRetAutorizacao4.asmx​
+
+Ambiente de produção com validade jurídica
+​Serviço
+Versão​	URL​
+NfeConsultaProtocolo​
+4.00​	https://www.svc.fazenda.gov.br/NFeConsultaProtocolo4/NFeConsultaProtocolo4.asmx
+​NfeStatusServico
+4.00​	https://www.svc.fazenda.gov.br/NFeStatusServico4/NFeStatusServico4.asmx
+​RecepcaoEvento
+4.00​	https://www.svc.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx
+​NFeAutorizacao
+4.00​	https://www.svc.fazenda.gov.br/NFeAutorizacao4/NFeAutorizacao4.asmx
+​NFeRetAutorizacao
+4.00​	https://www.svc.fazenda.gov.br/NFeRetAutorizacao4/NFeRetAutorizacao4.asmx​
+
+
+Endereço dos Web Services disponibilizados pelo Ambiente Nacional (AN)
+Ambiente de homologação externa
+​Serviço	Versão​	URL​
+RecepcaoEvento​
+4.00	https://hom.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx
+NFeDistribuicaoDFe​
+​1.00	https://hom.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx​
+
+Ambiente de produção com validade jurídica
+​Serviço
+Versão​	URL​
+RecepcaoEvento​
+4.00	https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx
+NFeDistribuicaoDFe​
+​1.00	https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx​

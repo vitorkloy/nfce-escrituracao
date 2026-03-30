@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { IonIcon } from '@ionic/react'
-import { bookOutline, documentTextOutline, downloadOutline, listOutline, settingsOutline } from 'ionicons/icons'
+import { bookOutline, documentTextOutline, downloadOutline, listOutline, pulseOutline, searchOutline, settingsOutline, receiptOutline } from 'ionicons/icons'
 import { useIsElectron } from '@/hooks/useIsElectron'
 import { ThemeSelector } from '@/components/nfce/theme-selector'
 import { ConfigPanel } from '@/components/nfce/panels/config-panel'
@@ -10,6 +10,8 @@ import { KeyListPanel } from '@/components/nfce/panels/key-list-panel'
 import { DownloadXmlPanel } from '@/components/nfce/panels/download-xml-panel'
 import { RelatorioPanel } from '@/components/nfce/panels/relatorio-panel'
 import { ManualPanel } from '@/components/nfce/panels/manual-panel'
+import { NfeStatusPanel } from '@/components/nfce/panels/nfe-status-panel'
+import { NfeConsultaPanel } from '@/components/nfce/panels/nfe-consulta-panel'
 import { LoadingOverlay } from '@/components/nfce/ui/loading-overlay'
 import { ToastStack } from '@/components/nfce/ui/toast-stack'
 import {
@@ -17,12 +19,12 @@ import {
   formatCnpjForDisplay,
   storeCertificateSidebarFallback,
 } from '@/lib/nfce-format'
-import type { AppTab, CertificateUiState, LoadingUiState, ToastMessage, ToastVariant } from '@/types/nfce-app'
+import type { AppModule, AppTab, CertificateUiState, LoadingUiState, ToastMessage, ToastVariant } from '@/types/nfce-app'
 
 const MAX_VISIBLE_TOASTS = 5
 const TOAST_AUTO_DISMISS_MS = 5000
 
-const MAIN_TABS: { id: AppTab; label: string; icon: string }[] = [
+const NFCE_TABS: { id: AppTab; label: string; icon: string }[] = [
   { id: 'config', label: 'Certificado', icon: settingsOutline },
   { id: 'listagem', label: 'Listagem', icon: listOutline },
   { id: 'download', label: 'Download XML', icon: downloadOutline },
@@ -30,9 +32,17 @@ const MAIN_TABS: { id: AppTab; label: string; icon: string }[] = [
   { id: 'manual', label: 'Manual', icon: bookOutline },
 ]
 
+const NFE_TABS: { id: AppTab; label: string; icon: string }[] = [
+  { id: 'config', label: 'Certificado', icon: settingsOutline },
+  { id: 'nfe-status', label: 'Status serviço', icon: pulseOutline },
+  { id: 'nfe-consulta', label: 'Consulta protocolo', icon: searchOutline },
+  { id: 'manual', label: 'Manual', icon: bookOutline },
+]
+
 export default function Home() {
   const { isElectron } = useIsElectron()
   const [appVersion, setAppVersion] = useState('')
+  const [appModule, setAppModule] = useState<AppModule | null>(null)
   const [activeTab, setActiveTab] = useState<AppTab>('config')
   const [certificateState, setCertificateState] = useState<CertificateUiState>({
     pfxPath: '',
@@ -116,6 +126,14 @@ export default function Home() {
       .catch(() => setAppVersion(''))
   }, [isElectron])
 
+  useEffect(() => {
+    if (!isElectron) return
+    window.electron.app
+      .getModulo()
+      .then((m) => setAppModule(m))
+      .catch(() => setAppModule(null))
+  }, [isElectron])
+
   const showToast = useCallback((variant: ToastVariant, message: string) => {
     const id = ++toastSeq.current
     setToasts((prev) => [...prev.slice(-(MAX_VISIBLE_TOASTS - 1)), { id, tipo: variant, msg: message }])
@@ -130,6 +148,56 @@ export default function Home() {
     (certificateState.origemStore && Boolean(certificateState.thumbprint)) ||
     (!certificateState.origemStore && Boolean(certificateState.pfxPath))
 
+  async function escolherModulo(modulo: AppModule) {
+    if (!isElectron) return
+    const ok = await window.electron.app.setModulo(modulo)
+    if (!ok) {
+      showToast('erro', 'Não foi possível salvar o módulo selecionado.')
+      return
+    }
+    setAppModule(modulo)
+    setActiveTab('config')
+  }
+
+  const tabs = appModule === 'nfe' ? NFE_TABS : NFCE_TABS
+
+  if (isElectron && !appModule) {
+    return (
+      <div className="h-screen w-screen bg-[var(--bg-deep)] flex items-center justify-center p-6">
+        <div className="w-full max-w-[620px] rounded border border-[var(--border)] bg-[var(--bg-base)] p-6">
+          <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-2">Escolha o módulo</h1>
+          <p className="text-sm text-[var(--text-secondary)] mb-5">
+            Selecione qual tipo de documento deseja operar neste acesso.
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => escolherModulo('nfce')}
+              className="rounded border border-[var(--teal-dim)] bg-[var(--teal-glow)] p-4 text-left no-drag"
+            >
+              <div className="flex items-center gap-2 mb-2 text-[var(--teal)]">
+                <IonIcon icon={receiptOutline} className="w-5 h-5" />
+                <span className="font-semibold">NFC-e</span>
+              </div>
+              <p className="text-xs text-[var(--text-secondary)]">Serviços de apoio à escrituração da NFC-e.</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => escolherModulo('nfe')}
+              className="rounded border border-[var(--border)] bg-[var(--bg-raised)] p-4 text-left no-drag"
+            >
+              <div className="flex items-center gap-2 mb-2 text-[var(--text-primary)]">
+                <IonIcon icon={documentTextOutline} className="w-5 h-5" />
+                <span className="font-semibold">NF-e</span>
+              </div>
+              <p className="text-xs text-[var(--text-secondary)]">Integração de NF-e (v4.00) em fase inicial.</p>
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen select-none bg-[var(--bg-deep)]">
       <aside className="flex flex-col w-56 shrink-0 bg-[var(--bg-base)] border-r border-[var(--border)]">
@@ -140,7 +208,7 @@ export default function Home() {
             <span className="font-semibold text-sm leading-tight text-[var(--text-primary)]">
               Escrituração
               <br />
-              NFC-e
+              {appModule === 'nfe' ? 'NF-e' : 'NFC-e'}
             </span>
           </div>
           <div className="mt-2 flex items-center gap-1.5">
@@ -208,7 +276,7 @@ export default function Home() {
         </div>
 
         <nav className="flex flex-col gap-0.5 px-3 flex-1" aria-label="Navegação principal">
-          {MAIN_TABS.map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -228,6 +296,35 @@ export default function Home() {
         </nav>
 
         <div className="px-5 py-4 border-t border-[var(--border)]">
+          <div className="mb-3">
+            <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-1.5">Módulo</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => escolherModulo('nfce')}
+                className={[
+                  'py-1.5 rounded text-xs font-semibold no-drag border',
+                  appModule === 'nfce'
+                    ? 'border-[var(--teal-dim)] bg-[var(--teal-glow)] text-[var(--teal)]'
+                    : 'border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-secondary)]',
+                ].join(' ')}
+              >
+                NFC-e
+              </button>
+              <button
+                type="button"
+                onClick={() => escolherModulo('nfe')}
+                className={[
+                  'py-1.5 rounded text-xs font-semibold no-drag border',
+                  appModule === 'nfe'
+                    ? 'border-[var(--teal-dim)] bg-[var(--teal-glow)] text-[var(--teal)]'
+                    : 'border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-secondary)]',
+                ].join(' ')}
+              >
+                NF-e
+              </button>
+            </div>
+          </div>
           <ThemeSelector />
           {appVersion && (
             <p className="text-xs font-mono mb-1 text-[var(--teal)]" title="Versão do aplicativo">
@@ -235,7 +332,7 @@ export default function Home() {
             </p>
           )}
           <p className="text-xs text-[var(--text-muted)]">
-            SAE-NFC-e v1.0.0
+            {appModule === 'nfe' ? 'SAE-NF-e' : 'SAE-NFC-e'} v2.0.0
           </p>
           <p className="text-xs text-[var(--text-muted)]">
             SEFAZ-SP · NT 2026
@@ -258,6 +355,7 @@ export default function Home() {
           {activeTab === 'listagem' && (
             <div className="h-full flex flex-col overflow-hidden">
               <KeyListPanel
+                appModule={appModule ?? 'nfce'}
                 certificateState={certificateState}
                 showToast={showToast}
                 onLoadingStateChange={setLoadingUi}
@@ -266,17 +364,27 @@ export default function Home() {
           )}
           {activeTab === 'download' && (
             <div className="h-full flex flex-col overflow-hidden">
-              <DownloadXmlPanel certificateState={certificateState} showToast={showToast} />
+              <DownloadXmlPanel appModule={appModule ?? 'nfce'} certificateState={certificateState} showToast={showToast} />
             </div>
           )}
           {activeTab === 'relatorio' && (
             <div className="h-full flex flex-col overflow-hidden">
-              <RelatorioPanel showToast={showToast} />
+              <RelatorioPanel appModule={appModule ?? 'nfce'} showToast={showToast} />
             </div>
           )}
           {activeTab === 'manual' && (
             <div className="h-full flex flex-col overflow-hidden">
               <ManualPanel />
+            </div>
+          )}
+          {activeTab === 'nfe-status' && appModule === 'nfe' && (
+            <div className="h-full flex flex-col overflow-hidden">
+              <NfeStatusPanel certificateState={certificateState} showToast={showToast} />
+            </div>
+          )}
+          {activeTab === 'nfe-consulta' && appModule === 'nfe' && (
+            <div className="h-full flex flex-col overflow-hidden">
+              <NfeConsultaPanel certificateState={certificateState} showToast={showToast} />
             </div>
           )}
         </div>

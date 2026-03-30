@@ -13,6 +13,7 @@ import {
   formatDateForDatetimeLocalInput,
 } from '@/lib/nfce-format'
 import type {
+  AppModule,
   BatchDownloadResponse,
   CertificateUiState,
   EmitenteFilter,
@@ -26,12 +27,13 @@ import { BUTTON_PRIMARY_CLASS, BUTTON_TEAL_GHOST_CLASS, INPUT_BASE_CLASS, SURFAC
 import { Spinner } from '@/components/nfce/ui/spinner'
 
 export interface KeyListPanelProps {
+  appModule: AppModule
   certificateState: CertificateUiState
   showToast: (variant: ToastVariant, message: string) => void
   onLoadingStateChange: (state: LoadingUiState) => void
 }
 
-export function KeyListPanel({ certificateState, showToast, onLoadingStateChange }: KeyListPanelProps) {
+export function KeyListPanel({ appModule, certificateState, showToast, onLoadingStateChange }: KeyListPanelProps) {
   const { isElectron } = useIsElectron()
   const today = new Date()
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -66,6 +68,10 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
   }, [isElectron, onLoadingStateChange])
 
   async function searchKeys() {
+    if (appModule === 'nfe') {
+      showToast('info', 'Módulo NF-e selecionado. A listagem de chaves será disponibilizada em uma próxima versão.')
+      return
+    }
     if (!isElectron) {
       showToast('erro', 'Funcionalidade disponível apenas no aplicativo desktop.')
       return
@@ -172,6 +178,10 @@ export function KeyListPanel({ certificateState, showToast, onLoadingStateChange
   const visibleRows = afterTextFilter.filter((item) => matchesEmitenteFilter(item.chave))
 
   async function downloadBatchXmlImpl(relatorioModo: 'agora' | 'depois') {
+    if (appModule === 'nfe') {
+      showToast('info', 'Módulo NF-e selecionado. O download em lote será habilitado em breve.')
+      return
+    }
     if (!isElectron) return
     if (downloadKeysSnapshot.length === 0) {
       showToast('info', 'Selecione ao menos uma chave.')

@@ -59,6 +59,26 @@ interface ResultadoDownload {
   eventos?: EventoProc[]
 }
 
+interface NfeStatusServicoResultado {
+  ok: boolean
+  cStat?: string
+  xMotivo?: string
+  tpAmb?: string
+  dhRecbto?: string
+  versaoAplic?: string
+}
+
+interface NfeConsultaProtocoloResultado {
+  ok: boolean
+  cStat?: string
+  xMotivo?: string
+  chave?: string
+  nProt?: string
+  dhRecbto?: string
+  xNome?: string
+  vNF?: string
+}
+
 interface ProgressoLote {
   atual: number
   total: number
@@ -66,6 +86,7 @@ interface ProgressoLote {
 }
 
 type ThemePreference = 'light' | 'dark' | 'system'
+type AppModule = 'nfce' | 'nfe'
 
 declare global {
   interface Window {
@@ -124,6 +145,10 @@ declare global {
         onProgressoListagem(cb: (total: number) => void): () => void
         onProgressoLote(cb: (info: ProgressoLote) => void): () => void
       }
+      nfe: {
+        statusServico(config: SefazConfig): Promise<NfeStatusServicoResultado>
+        consultarProtocolo(config: SefazConfig, chave: string): Promise<NfeConsultaProtocoloResultado>
+      }
       fs: {
         selecionarPasta(): Promise<string | null>
         salvarXml(conteudo: string, nomeArquivo: string): Promise<boolean>
@@ -152,6 +177,8 @@ declare global {
         setBusy(busy: boolean): void
         /** Versão semver do package.json (instalador NSIS usa o mesmo número) */
         getVersion(): Promise<string>
+        getModulo(): Promise<AppModule | null>
+        setModulo(modulo: AppModule): Promise<boolean>
       }
       ui: {
         getTheme(): Promise<ThemePreference>

@@ -1,14 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import type { ToastVariant } from '@/types/nfce-app'
+import type { AppModule, ToastVariant } from '@/types/nfce-app'
 import { useIsElectron } from '@/hooks/useIsElectron'
 
 export interface RelatorioPanelProps {
+  appModule: AppModule
   showToast: (variant: ToastVariant, message: string) => void
 }
 
-export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
+export function RelatorioPanel({ appModule, showToast }: RelatorioPanelProps) {
   const { isElectron } = useIsElectron()
   const [pasta, setPasta] = useState<string>('')
   const [isGerando, setIsGerando] = useState(false)
@@ -56,6 +57,10 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
   }
 
   async function gerarXlsx() {
+    if (appModule === 'nfe') {
+      showToast('info', 'Módulo NF-e selecionado. O relatório XLSX será habilitado em uma próxima versão.')
+      return
+    }
     if (!isElectron) {
       showToast('erro', 'Funcionalidade disponível apenas no aplicativo desktop.')
       return
@@ -95,7 +100,7 @@ export function RelatorioPanel({ showToast }: RelatorioPanelProps) {
     <div className="fade-in flex flex-col h-full">
       <div className="p-6 pb-4 border-b border-[var(--border)]">
         <h2 className="text-xl font-semibold mb-4 text-[var(--text-primary)]">
-          Relatório interno (XLSX)
+          Relatório interno (XLSX) - {appModule === 'nfe' ? 'NF-e' : 'NFC-e'}
         </h2>
 
         <p className="text-sm text-[var(--text-secondary)] mb-4">

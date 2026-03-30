@@ -18,6 +18,7 @@ import {
   type ResultadoListagem,
   type ResultadoDownload,
 } from './sefaz'
+import { nfeConsultaProtocolo, nfeStatusServico } from './nfe'
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
@@ -27,6 +28,7 @@ const execFileAsync = promisify(execFile)
 // ---------------------------------------------------------------------------
 
 type ThemePreference = 'light' | 'dark' | 'system'
+type AppModule = 'nfce' | 'nfe'
 
 interface CertStorePayload {
   pfxPath: string
@@ -39,6 +41,7 @@ interface StoreSchema {
   cert?: CertStorePayload
   ui?: {
     theme?: ThemePreference
+    modulo?: AppModule
   }
 }
 
@@ -49,6 +52,13 @@ function readTheme(): ThemePreference {
   const t = ui?.theme
   if (t === 'light' || t === 'dark' || t === 'system') return t
   return 'system'
+}
+
+function readModulo(): AppModule | null {
+  const ui = store.get('ui') as { modulo?: AppModule } | undefined
+  const m = ui?.modulo
+  if (m === 'nfce' || m === 'nfe') return m
+  return null
 }
 
 function applyNativeThemeSource(t: ThemePreference) {
@@ -267,6 +277,13 @@ app.on('window-all-closed', () => {
 
 // Versão do app (package.json) — instalador e electron-builder usam o mesmo campo
 ipcMain.handle('app:get-version', () => app.getVersion())
+ipcMain.handle('app:get-modulo', () => readModulo())
+ipcMain.handle('app:set-modulo', (_e, modulo: AppModule) => {
+  if (modulo !== 'nfce' && modulo !== 'nfe') return false
+  const existingUi = store.get('ui') as Record<string, unknown> | undefined
+  store.set('ui', { ...(existingUi ?? {}), modulo })
+  return true
+})
 ipcMain.on('app:set-busy', (_e, busy: boolean) => {
   appEstaOcupada = Boolean(busy)
 })
@@ -1007,6 +1024,59 @@ ipcMain.handle(
 
     } catch (err: unknown) {
       return { ok: false, xMotivo: mensagemErro(err), resultados }
+    } finally {
+      if (tmpCriado && pfxPath) limparPfxTemp(pfxPath)
+    }
+  }
+)
+
+// ---------------------------------------------------------------------------
+// IPC — NF-e (módulo)
+// ---------------------------------------------------------------------------
+
+ipcMain.handle(
+  'nfe:status-servico',
+  async (
+    _e,
+    config: ConfigCert & { thumbprint?: string }
+  ) => {
+    let pfxPath = ''
+    let tmpCriado = false
+    try {
+      const resolved = await resolverPfx(config)
+      pfxPath = resolved.pfxPath
+      tmpCriado = resolved.tmpCriado
+      const cfg = { ...config, pfxPath, senha: resolved.senha }
+      const agente = criarAgente(cfg.pfxPath, cfg.senha)
+      const resultado = await nfeStatusServico(cfg, agente)
+      return { ok: true, ...resultado }
+    } catch (err: unknown) {
+      return { ok: false, xMotivo: mensagemErro(err) }
+    } finally {
+      if (tmpCriado && pfxPath) limparPfxTemp(pfxPath)
+    }
+  }
+)
+
+ipcMain.handle(
+  'nfe:consultar-protocolo',
+  async (
+    _e,
+    config: ConfigCert & { thumbprint?: string },
+    chave: string
+  ) => {
+    let pfxPath = ''
+    let tmpCriado = false
+    try {
+      const resolved = await resolverPfx(config)
+      pfxPath = resolved.pfxPath
+      tmpCriado = resolved.tmpCriado
+      const cfg = { ...config, pfxPath, senha: resolved.senha }
+      const agente = criarAgente(cfg.pfxPath, cfg.senha)
+      const resultado = await nfeConsultaProtocolo(cfg, chave, agente)
+      return { ok: true, ...resultado }
+    } catch (err: unknown) {
+      return { ok: false, xMotivo: mensagemErro(err) }
     } finally {
       if (tmpCriado && pfxPath) limparPfxTemp(pfxPath)
     }

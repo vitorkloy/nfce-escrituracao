@@ -6,7 +6,7 @@ import { downloadOutline, documentTextOutline, saveOutline } from 'ionicons/icon
 import { useIsElectron } from '@/hooks/useIsElectron'
 import { getErrorMessage } from '@/lib/error-utils'
 import { TAMANHO_CHAVE_ACESSO } from '@/lib/nfce-format'
-import type { CertificateUiState, ToastVariant } from '@/types/nfce-app'
+import type { AppModule, CertificateUiState, ToastVariant } from '@/types/nfce-app'
 import { CertificatePasswordWarning } from '@/components/nfce/certificate-password-warning'
 import { Badge } from '@/components/nfce/ui/badge'
 import { BUTTON_PRIMARY_CLASS, BUTTON_SUBTLE_CLASS, BUTTON_TEAL_GHOST_CLASS, SURFACE_CARD_CLASS } from '@/components/nfce/ui/classes'
@@ -21,17 +21,22 @@ interface DownloadXmlResult {
 }
 
 export interface DownloadXmlPanelProps {
+  appModule: AppModule
   certificateState: CertificateUiState
   showToast: (variant: ToastVariant, message: string) => void
 }
 
-export function DownloadXmlPanel({ certificateState, showToast }: DownloadXmlPanelProps) {
+export function DownloadXmlPanel({ appModule, certificateState, showToast }: DownloadXmlPanelProps) {
   const { isElectron } = useIsElectron()
   const [accessKeyInput, setAccessKeyInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [downloadResult, setDownloadResult] = useState<DownloadXmlResult | null>(null)
 
   async function downloadXml() {
+    if (appModule === 'nfe') {
+      showToast('info', 'Módulo NF-e selecionado. O download por chave será disponibilizado em breve.')
+      return
+    }
     const digitsOnly = accessKeyInput.replace(/\s/g, '')
     if (!new RegExp(`^\\d{${TAMANHO_CHAVE_ACESSO}}$`).test(digitsOnly)) {
       showToast('erro', 'A chave de acesso deve ter exatamente 44 dígitos numéricos.')

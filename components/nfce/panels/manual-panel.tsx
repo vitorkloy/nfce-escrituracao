@@ -9,6 +9,14 @@ export function ManualPanel() {
       </p>
 
       <section className="mb-5 rounded border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">0) Escolher módulo</h3>
+        <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
+          <li>Use o seletor de módulo na barra lateral para alternar entre <strong>NFC-e</strong> e <strong>NF-e</strong>.</li>
+          <li>A navegação e as funções mudam conforme o módulo selecionado.</li>
+        </ul>
+      </section>
+
+      <section className="mb-5 rounded border border-[var(--border)] bg-[var(--bg-surface)] p-4">
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">1) Configurar certificado</h3>
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
           <li>Acesse a aba <strong>Certificado</strong>.</li>
@@ -64,6 +72,7 @@ export function ManualPanel() {
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">Observações importantes</h3>
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
           <li>Não feche o app durante buscas ou downloads em andamento.</li>
+          <li>No módulo <strong>NF-e</strong>, use as páginas próprias de status de serviço e consulta por chave/protocolo.</li>
           <li>
             O XLSX inclui uma linha inicial com <strong>EMPRESA</strong> e <strong>CNPJ</strong> (extraídos do XML),
             cabeçalho estilizado e colunas número do documento, data de emissão e valor do cupom.

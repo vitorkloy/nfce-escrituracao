@@ -63,6 +63,13 @@ contextBridge.exposeInMainWorld('electron', {
     },
   },
 
+  nfe: {
+    statusServico: (config: ConfigCert & { thumbprint?: string }) =>
+      ipcRenderer.invoke('nfe:status-servico', config),
+    consultarProtocolo: (config: ConfigCert & { thumbprint?: string }, chave: string) =>
+      ipcRenderer.invoke('nfe:consultar-protocolo', config, chave),
+  },
+
   fs: {
     selecionarPasta:  ()                                => ipcRenderer.invoke('fs:selecionar-pasta'),
     salvarXml:        (c: string, n: string)            => ipcRenderer.invoke('fs:salvar-xml', c, n),
@@ -79,6 +86,8 @@ contextBridge.exposeInMainWorld('electron', {
   app: {
     setBusy: (busy: boolean) => ipcRenderer.send('app:set-busy', busy),
     getVersion: () => ipcRenderer.invoke('app:get-version') as Promise<string>,
+    getModulo: () => ipcRenderer.invoke('app:get-modulo') as Promise<'nfce' | 'nfe' | null>,
+    setModulo: (modulo: 'nfce' | 'nfe') => ipcRenderer.invoke('app:set-modulo', modulo) as Promise<boolean>,
   },
 
   ui: {

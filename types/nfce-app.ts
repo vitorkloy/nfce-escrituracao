@@ -3,9 +3,17 @@
  * Mantidos fora dos componentes para leitura e reutilização mais simples.
  */
 
-export type AppTab = 'config' | 'listagem' | 'download' | 'relatorio' | 'manual'
+export type AppTab =
+  | 'config'
+  | 'listagem'
+  | 'download'
+  | 'relatorio'
+  | 'manual'
+  | 'nfe-status'
+  | 'nfe-consulta'
 
 export type SefazEnvironment = 'homologacao' | 'producao'
+export type AppModule = 'nfce' | 'nfe'
 
 export type CertificateSourceMode = 'store' | 'arquivo'
 
