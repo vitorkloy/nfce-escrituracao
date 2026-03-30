@@ -1,4 +1,4 @@
-# CONTEXTO COMPLETO — Escrituração NFC-e (SEFAZ-SP)
+# CONTEXTO COMPLETO — Escrituração Fiscal (SEFAZ-SP)
 
 > Para alimentar o Cursor AI e continuar o desenvolvimento
 

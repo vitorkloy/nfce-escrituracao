@@ -3,8 +3,8 @@ import './globals.css'
 import { ThemeProvider } from './theme-provider'
 
 export const metadata: Metadata = {
-  title: 'Escrituração NFC-e — SEFAZ-SP',
-  description: 'Serviços de Apoio à Escrituração da NFC-e',
+  title: 'Escrituração Fiscal — SEFAZ-SP',
+  description: 'Aplicativo de escrituração fiscal com integração aos serviços da SEFAZ (NF-e, NFC-e e demais módulos).',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -18,7 +18,7 @@ import {
   type ResultadoListagem,
   type ResultadoDownload,
 } from './sefaz'
-import { nfeConsultaProtocolo, nfeStatusServico } from './nfe'
+import { nfeDistDFeInteresse, nfeRecepcaoEventoNF } from './nfe'
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
@@ -41,7 +41,6 @@ interface StoreSchema {
   cert?: CertStorePayload
   ui?: {
     theme?: ThemePreference
-    modulo?: AppModule
   }
 }
 
@@ -54,11 +53,14 @@ function readTheme(): ThemePreference {
   return 'system'
 }
 
-function readModulo(): AppModule | null {
-  const ui = store.get('ui') as { modulo?: AppModule } | undefined
-  const m = ui?.modulo
-  if (m === 'nfce' || m === 'nfe') return m
-  return null
+/** Módulo (NFC-e / NF-e) não é persistido — sempre escolher ao iniciar. Remove chave legada do store. */
+function limparModuloPersistidoDoStore(): void {
+  const ui = store.get('ui') as Record<string, unknown> | undefined
+  if (!ui || !('modulo' in ui)) return
+  const { modulo: _m, ...rest } = ui
+  const next = Object.keys(rest).length > 0 ? rest : undefined
+  if (next) store.set('ui', next as StoreSchema['ui'])
+  else store.delete('ui' as keyof StoreSchema)
 }
 
 function applyNativeThemeSource(t: ThemePreference) {
@@ -205,6 +207,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: windowBackgroundHex(),
+    title: 'Escrituração Fiscal',
     titleBarStyle: 'hiddenInset',
     ...(icon ? { icon } : {}),
     webPreferences: {
@@ -262,6 +265,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  limparModuloPersistidoDoStore()
   applyNativeThemeSource(readTheme())
   nativeTheme.on('updated', () => updateMainWindowBackground())
 
@@ -277,13 +281,7 @@ app.on('window-all-closed', () => {
 
 // Versão do app (package.json) — instalador e electron-builder usam o mesmo campo
 ipcMain.handle('app:get-version', () => app.getVersion())
-ipcMain.handle('app:get-modulo', () => readModulo())
-ipcMain.handle('app:set-modulo', (_e, modulo: AppModule) => {
-  if (modulo !== 'nfce' && modulo !== 'nfe') return false
-  const existingUi = store.get('ui') as Record<string, unknown> | undefined
-  store.set('ui', { ...(existingUi ?? {}), modulo })
-  return true
-})
+ipcMain.handle('app:set-modulo', (_e, modulo: AppModule) => modulo === 'nfce' || modulo === 'nfe')
 ipcMain.on('app:set-busy', (_e, busy: boolean) => {
   appEstaOcupada = Boolean(busy)
 })
@@ -1035,21 +1033,20 @@ ipcMain.handle(
 // ---------------------------------------------------------------------------
 
 ipcMain.handle(
-  'nfe:status-servico',
-  async (
-    _e,
-    config: ConfigCert & { thumbprint?: string }
-  ) => {
+  'nfe:distribuicao-dfe',
+  async (_e, config: ConfigCert & { thumbprint?: string }, nfeDadosMsgXml: string) => {
     let pfxPath = ''
     let tmpCriado = false
     try {
+      const xml = String(nfeDadosMsgXml ?? '').trim()
+      if (!xml) return { ok: false, xMotivo: 'Informe o XML do conteúdo de nfeDadosMsg (ex.: distDFeInt).' }
       const resolved = await resolverPfx(config)
       pfxPath = resolved.pfxPath
       tmpCriado = resolved.tmpCriado
       const cfg = { ...config, pfxPath, senha: resolved.senha }
       const agente = criarAgente(cfg.pfxPath, cfg.senha)
-      const resultado = await nfeStatusServico(cfg, agente)
-      return { ok: true, ...resultado }
+      const xmlResposta = await nfeDistDFeInteresse(cfg, xml, agente)
+      return { ok: true, xmlResposta }
     } catch (err: unknown) {
       return { ok: false, xMotivo: mensagemErro(err) }
     } finally {
@@ -1059,22 +1056,20 @@ ipcMain.handle(
 )
 
 ipcMain.handle(
-  'nfe:consultar-protocolo',
-  async (
-    _e,
-    config: ConfigCert & { thumbprint?: string },
-    chave: string
-  ) => {
+  'nfe:recepcao-evento',
+  async (_e, config: ConfigCert & { thumbprint?: string }, nfeDadosMsgXml: string) => {
     let pfxPath = ''
     let tmpCriado = false
     try {
+      const xml = String(nfeDadosMsgXml ?? '').trim()
+      if (!xml) return { ok: false, xMotivo: 'Informe o XML do conteúdo de nfeDadosMsg (lote de eventos).' }
       const resolved = await resolverPfx(config)
       pfxPath = resolved.pfxPath
       tmpCriado = resolved.tmpCriado
       const cfg = { ...config, pfxPath, senha: resolved.senha }
       const agente = criarAgente(cfg.pfxPath, cfg.senha)
-      const resultado = await nfeConsultaProtocolo(cfg, chave, agente)
-      return { ok: true, ...resultado }
+      const xmlResposta = await nfeRecepcaoEventoNF(cfg, xml, agente)
+      return { ok: true, xmlResposta }
     } catch (err: unknown) {
       return { ok: false, xMotivo: mensagemErro(err) }
     } finally {

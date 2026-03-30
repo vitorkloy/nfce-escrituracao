@@ -1,6 +1,6 @@
-# ⬡ Escrituração NFC-e — SEFAZ-SP
+# ⬡ Escrituração Fiscal — SEFAZ-SP
 
-> Cliente desktop para os **Serviços de Apoio à Escrituração da NFC-e**, conforme a Nota Técnica 2026 (SAE-NFC-e v1.0.0).  
+> **Escrituração Fiscal** — cliente desktop para serviços da SEFAZ, incluindo **Serviços de Apoio à Escrituração da NFC-e** (Nota Técnica 2026, SAE-NFC-e v1.0.0) e módulos de NF-e.  
 > Construído com **Electron + Next.js + TypeScript**.
 
 ---
@@ -113,7 +113,7 @@ A versão exibida no app e no nome do `.exe` vem só do campo **`version`** em `
 
 ```bash
 npm run build
-# → release/Escrituração NFC-e Setup x.x.x.exe
+# → release/Escrituração Fiscal Setup x.x.x.exe
 ```
 
 **Requisitos:** Node 20+, Windows x64 para o instalador NSIS. Ícones: veja `public/README.md`.

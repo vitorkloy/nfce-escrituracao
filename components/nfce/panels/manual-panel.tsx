@@ -5,14 +5,18 @@ export function ManualPanel() {
     <div className="fade-in h-full overflow-auto p-6">
       <h2 className="text-xl font-semibold mb-2 text-[var(--text-primary)]">Manual de uso</h2>
       <p className="text-sm text-[var(--text-secondary)] mb-6">
-        Guia prático para usar o app de Escrituração NFC-e do início ao fim.
+        Guia prático do aplicativo Escrituração Fiscal, do início ao fim.
       </p>
 
       <section className="mb-5 rounded border border-[var(--border)] bg-[var(--bg-surface)] p-4">
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">0) Escolher módulo</h3>
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
-          <li>Use o seletor de módulo na barra lateral para alternar entre <strong>NFC-e</strong> e <strong>NF-e</strong>.</li>
-          <li>A navegação e as funções mudam conforme o módulo selecionado.</li>
+          <li>
+            A cada abertura do aplicativo você escolhe <strong>NFC-e</strong> ou <strong>NF-e</strong> — a opção{' '}
+            <strong>não é gravada</strong> no disco.
+          </li>
+          <li>Durante o uso, o seletor na barra lateral permite alternar entre os dois módulos.</li>
+          <li>A navegação e as funções mudam conforme o módulo ativo.</li>
         </ul>
       </section>
 
@@ -72,7 +76,13 @@ export function ManualPanel() {
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">Observações importantes</h3>
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
           <li>Não feche o app durante buscas ou downloads em andamento.</li>
-          <li>No módulo <strong>NF-e</strong>, use as páginas próprias de status de serviço e consulta por chave/protocolo.</li>
+          <li>
+            No módulo <strong>NF-e</strong> há só <strong>NFeDistribuicaoDFe</strong> e{' '}
+            <strong>NFeRecepcaoEvento4</strong> (produção AN). Em <strong>Distribuição DFe</strong>, o{' '}
+            <strong>Modo 1 — Listagem</strong> monta o <code className="text-[11px]">distDFeInt</code> com{' '}
+            <code className="text-[11px]">distNSU/ultNSU</code> (primeira consulta com NSU zero; até 50 XMLs por retorno).
+            Também é possível enviar XML livre. Em <strong>Recepção evento</strong>, cole o XML do lote de eventos.
+          </li>
           <li>
             O XLSX inclui uma linha inicial com <strong>EMPRESA</strong> e <strong>CNPJ</strong> (extraídos do XML),
             cabeçalho estilizado e colunas número do documento, data de emissão e valor do cupom.

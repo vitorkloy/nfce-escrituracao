@@ -9,8 +9,15 @@ export type AppTab =
   | 'download'
   | 'relatorio'
   | 'manual'
-  | 'nfe-status'
-  | 'nfe-consulta'
+  | 'nfe-dist-dfe'
+  | 'nfe-recepcao-evento'
+
+/** Item da barra lateral (ícone Ionicons como data URI / nome). */
+export interface NavTabConfig {
+  id: AppTab
+  label: string
+  icon: string
+}
 
 export type SefazEnvironment = 'homologacao' | 'producao'
 export type AppModule = 'nfce' | 'nfe'

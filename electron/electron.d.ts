@@ -59,24 +59,11 @@ interface ResultadoDownload {
   eventos?: EventoProc[]
 }
 
-interface NfeStatusServicoResultado {
+interface NfeSoapResultado {
   ok: boolean
-  cStat?: string
+  /** XML bruto da resposta SOAP (envelope ou retorno). */
+  xmlResposta?: string
   xMotivo?: string
-  tpAmb?: string
-  dhRecbto?: string
-  versaoAplic?: string
-}
-
-interface NfeConsultaProtocoloResultado {
-  ok: boolean
-  cStat?: string
-  xMotivo?: string
-  chave?: string
-  nProt?: string
-  dhRecbto?: string
-  xNome?: string
-  vNF?: string
 }
 
 interface ProgressoLote {
@@ -146,8 +133,8 @@ declare global {
         onProgressoLote(cb: (info: ProgressoLote) => void): () => void
       }
       nfe: {
-        statusServico(config: SefazConfig): Promise<NfeStatusServicoResultado>
-        consultarProtocolo(config: SefazConfig, chave: string): Promise<NfeConsultaProtocoloResultado>
+        distribuicaoDfe(config: SefazConfig, nfeDadosMsgXml: string): Promise<NfeSoapResultado>
+        recepcaoEvento(config: SefazConfig, nfeDadosMsgXml: string): Promise<NfeSoapResultado>
       }
       fs: {
         selecionarPasta(): Promise<string | null>
@@ -177,7 +164,7 @@ declare global {
         setBusy(busy: boolean): void
         /** Versão semver do package.json (instalador NSIS usa o mesmo número) */
         getVersion(): Promise<string>
-        getModulo(): Promise<AppModule | null>
+        /** Valida módulo na sessão (não persiste — nova escolha a cada abertura do app). */
         setModulo(modulo: AppModule): Promise<boolean>
       }
       ui: {
