@@ -41,6 +41,7 @@ export interface NfeDistDfeSyncResultado {
 }
 
 const STATE_FILENAME = '.nfe-dist-state.json'
+const DEBUG_LOG_FILENAME = 'sync-debug.log'
 const MAX_LOTES_SEGURANCA = 2000
 /** Pausa entre lotes para reduzir 656 (consumo indevido) por requisições muito seguidas. */
 const INTERVALO_ENTRE_LOTES_MS = 900
@@ -52,6 +53,32 @@ function delay(ms: number): Promise<void> {
 function caminhoState(pastaRaiz: string, cnpj14: string): string {
   const base = path.join(pastaRaiz, cnpj14.replace(/\D/g, ''))
   return path.join(base, STATE_FILENAME)
+}
+
+function caminhoDebugLog(pastaRaiz: string, cnpj14: string): string {
+  const base = path.join(pastaRaiz, cnpj14.replace(/\D/g, ''))
+  return path.join(base, DEBUG_LOG_FILENAME)
+}
+
+function escreverDebugSync(
+  pastaRaiz: string,
+  cnpj14: string,
+  payload: Record<string, string | number | boolean | undefined>
+): void {
+  try {
+    const cnpj = cnpj14.replace(/\D/g, '')
+    const dir = path.join(pastaRaiz, cnpj)
+    fs.mkdirSync(dir, { recursive: true })
+    const file = caminhoDebugLog(pastaRaiz, cnpj14)
+    const ts = new Date().toISOString()
+    const corpo = Object.entries(payload)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => `${k}=${String(v).replace(/\s+/g, ' ').trim()}`)
+      .join(' | ')
+    fs.appendFileSync(file, `[${ts}] ${corpo}\n`, 'utf-8')
+  } catch {
+    /* log nunca deve quebrar o fluxo principal */
+  }
 }
 
 export function carregarUltNsu(pastaRaiz: string, cnpj14: string): string {
@@ -121,6 +148,13 @@ export async function sincronizarDistDfeNfe(params: {
   let totalSalvos = 0
   let totalIgnorados = 0
   let lotes = 0
+  escreverDebugSync(pastaRaiz, cnpj14, {
+    evento: 'sync_inicio',
+    cnpj14: cnpj14.replace(/\D/g, ''),
+    cUFAutor,
+    reiniciarNsu,
+    ultNSUInicial: ultNSU,
+  })
 
   const emit = (p: NfeDistDfeSyncProgresso) => {
     onProgress?.(p)
@@ -138,6 +172,12 @@ export async function sincronizarDistDfeNfe(params: {
         retXml = extrairXmlRetDistDfeInt(soapXml)
       } catch (e) {
         const snippet = soapXml.slice(0, 800)
+        escreverDebugSync(pastaRaiz, cnpj14, {
+          evento: 'erro_extracao_soap',
+          lote: i + 1,
+          ultNSUSolicitado: ultNSU,
+          motivo: e instanceof Error ? e.message : 'parse_soap',
+        })
         return {
           ok: false,
           totalSalvos,
@@ -150,6 +190,16 @@ export async function sincronizarDistDfeNfe(params: {
 
       const ret = parsearRetDistDfeInt(retXml)
       lotes += 1
+      escreverDebugSync(pastaRaiz, cnpj14, {
+        evento: 'lote_recebido',
+        lote: lotes,
+        ultNSUSolicitado: ultNSU,
+        cStat: ret.cStat,
+        xMotivo: ret.xMotivo,
+        ultNSURetorno: ret.ultNSU,
+        maxNSURetorno: ret.maxNSU,
+        docZip: ret.documentos.length,
+      })
 
       if (ret.cStat === '656') {
         const nsuSolicitado656 = ultNSU
@@ -163,6 +213,13 @@ export async function sincronizarDistDfeNfe(params: {
           ultApos656 = candidato656
         }
         emit({ tipo: 'erro', cStat: '656', mensagem: detalhe })
+        escreverDebugSync(pastaRaiz, cnpj14, {
+          evento: 'erro_656',
+          lote: lotes,
+          ultNSUSolicitado: nsuSolicitado656,
+          ultNSUPersistido: ultApos656,
+          xMotivo: detalhe,
+        })
         return {
           ok: false,
           totalSalvos,
@@ -173,13 +230,23 @@ export async function sincronizarDistDfeNfe(params: {
         }
       }
 
-      if (ret.cStat === '138') {
+      // DistDFe AN: 138 = documento(s) localizado(s), 137 = nenhum documento localizado.
+      if (ret.cStat === '137') {
         persistirUltNsu(pastaRaiz, cnpj14, ret.ultNSU)
+        escreverDebugSync(pastaRaiz, cnpj14, {
+          evento: 'sync_concluido_137_sem_docs',
+          lote: lotes,
+          ultNSU: ret.ultNSU,
+          maxNSU: ret.maxNSU,
+          totalSalvos,
+          totalIgnorados,
+          xMotivo: ret.xMotivo,
+        })
         emit({
           tipo: 'concluido',
           ultNSU: ret.ultNSU,
           maxNSU: ret.maxNSU,
-          cStat: '138',
+          cStat: '137',
           totalSalvos,
           totalIgnorados,
           mensagem: ret.xMotivo || 'Sem novos documentos.',
@@ -193,7 +260,14 @@ export async function sincronizarDistDfeNfe(params: {
         }
       }
 
-      if (ret.cStat !== '137') {
+      if (ret.cStat !== '138') {
+        escreverDebugSync(pastaRaiz, cnpj14, {
+          evento: 'erro_cstat_nao_sucesso',
+          lote: lotes,
+          cStat: ret.cStat,
+          xMotivo: ret.xMotivo,
+          ultNSU,
+        })
         return {
           ok: false,
           totalSalvos,
@@ -232,6 +306,14 @@ export async function sincronizarDistDfeNfe(params: {
           mensagem:
             'NSU não avançou após lote com documentos — possível falha de leitura do XML. Aguarde antes de tentar de novo.',
         })
+        escreverDebugSync(pastaRaiz, cnpj14, {
+          evento: 'erro_nsu_sem_avanco',
+          lote: lotes,
+          ultNSUSolicitado: nsuSolicitadoNesteLote,
+          ultNSURetornado: ret.ultNSU,
+          maxNSURetornado: ret.maxNSU,
+          docZip: ret.documentos.length,
+        })
         return {
           ok: false,
           totalSalvos,
@@ -259,6 +341,14 @@ export async function sincronizarDistDfeNfe(params: {
       })
 
       if (maxNsuValidoParaTerminoSincronia(ret.maxNSU) && compararNsu(ultNSU, ret.maxNSU) >= 0) {
+        escreverDebugSync(pastaRaiz, cnpj14, {
+          evento: 'sync_concluido_max_nsu',
+          lote: lotes,
+          ultNSU,
+          maxNSU: ret.maxNSU,
+          totalSalvos,
+          totalIgnorados,
+        })
         emit({
           tipo: 'concluido',
           ultNSU,
@@ -271,6 +361,15 @@ export async function sincronizarDistDfeNfe(params: {
       }
 
       if (ret.documentos.length === 0) {
+        escreverDebugSync(pastaRaiz, cnpj14, {
+          evento: 'sync_concluido_sem_doczip',
+          lote: lotes,
+          ultNSU,
+          maxNSU: ret.maxNSU,
+          totalSalvos,
+          totalIgnorados,
+          xMotivo: ret.xMotivo,
+        })
         emit({
           tipo: 'concluido',
           ultNSU,
@@ -293,6 +392,14 @@ export async function sincronizarDistDfeNfe(params: {
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
+    escreverDebugSync(pastaRaiz, cnpj14, {
+      evento: 'erro_excecao_sync',
+      ultNSU,
+      lotes,
+      totalSalvos,
+      totalIgnorados,
+      motivo: msg,
+    })
     emit({ tipo: 'erro', mensagem: msg })
     return {
       ok: false,
