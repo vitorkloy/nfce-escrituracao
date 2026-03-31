@@ -186,18 +186,35 @@ export function extrairCnpjEmitenteDaChave44(chave: string): string | undefined 
   return d.slice(6, 20)
 }
 
+/** Corpo da primeira ocorrência de uma tag local com ou sem prefixo (ex.: emit / nfe:emit). */
+function corpoPrimeiraTagLocal(xml: string, localName: string): string | undefined {
+  const esc = localName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(
+    `<(?:[\\w.-]+:)?${esc}\\b[^>]*>([\\s\\S]*?)<\\/(?:[\\w.-]+:)?${esc}>`,
+    'i'
+  )
+  const m = xml.match(re)
+  return m?.[1]
+}
+
+/** Primeiro CNPJ 14 dígitos dentro de um fragmento (aceita &lt;CNPJ&gt; ou &lt;nfe:CNPJ&gt;). */
+function extrairPrimeiroCnpj14NoBloco(bloco: string): string | undefined {
+  const m = bloco.match(/<(?:[\w.-]+:)?CNPJ>(\d{14})<\/(?:[\w.-]+:)?CNPJ>/i)
+  return m?.[1]
+}
+
 /** Emitente em procNFe/NFe, resNFe resumo ou, em último caso, pela chave. */
 export function extrairCnpjEmitenteDistDfe(xml: string): string | undefined {
-  const emitBloco = xml.match(/<emit>([\s\S]*?)<\/emit>/i)
-  if (emitBloco) {
-    const c = emitBloco[1].match(/<CNPJ>(\d{14})<\/CNPJ>/i)
-    if (c?.[1]) return c[1]
+  const emitCorpo = corpoPrimeiraTagLocal(xml, 'emit')
+  if (emitCorpo) {
+    const c = extrairPrimeiroCnpj14NoBloco(emitCorpo)
+    if (c) return c
   }
-  if (/<resNFe\b/i.test(xml)) {
-    const inner = xml.match(/<resNFe[^>]*>([\s\S]*?)<\/resNFe>/i)
-    if (inner) {
-      const c = inner[1].match(/<CNPJ>(\d{14})<\/CNPJ>/i)
-      if (c?.[1]) return c[1]
+  if (/<(?:[\w.-]+:)?resNFe\b/i.test(xml)) {
+    const corpoRes = corpoPrimeiraTagLocal(xml, 'resNFe')
+    if (corpoRes) {
+      const c = extrairPrimeiroCnpj14NoBloco(corpoRes)
+      if (c) return c
     }
   }
   const chave = extrairChaveAcesso44(xml)
@@ -207,18 +224,16 @@ export function extrairCnpjEmitenteDistDfe(xml: string): string | undefined {
 
 /** Destinatário em NFe (tag dest). resNFe costuma não trazer dest — aí não há match para filtro “entrada”. */
 export function extrairCnpjDestinatarioDistDfe(xml: string): string | undefined {
-  const destBloco = xml.match(/<dest>([\s\S]*?)<\/dest>/i)
-  if (!destBloco) return undefined
-  const c = destBloco[1].match(/<CNPJ>(\d{14})<\/CNPJ>/i)
-  return c?.[1]
+  const destCorpo = corpoPrimeiraTagLocal(xml, 'dest')
+  if (!destCorpo) return undefined
+  return extrairPrimeiroCnpj14NoBloco(destCorpo)
 }
 
 /** CNPJ do autor do evento (infEvento) — ex.: manifestação pelo dest ou cancelamento pelo emit. */
 export function extrairCnpjAutorEventoNFe(xml: string): string | undefined {
-  const inner = xml.match(/<infEvento[^>]*>([\s\S]*?)<\/infEvento>/i)
-  if (!inner) return undefined
-  const c = inner[1].match(/<CNPJ>(\d{14})<\/CNPJ>/i)
-  return c?.[1]
+  const corpo = corpoPrimeiraTagLocal(xml, 'infEvento')
+  if (!corpo) return undefined
+  return extrairPrimeiroCnpj14NoBloco(corpo)
 }
 
 /**
@@ -236,6 +251,11 @@ export function devePersistirDocumentoDistDfe(
 
   const tipo = inferirTipoArquivoDistDfe(schema, xml)
   if (tipo === 'evento') {
+    if (filtro === 'emitente') {
+      const ch = extrairChaveAcesso44(xml)
+      const emDaChave = ch ? extrairCnpjEmitenteDaChave44(ch) : undefined
+      return Boolean(emDaChave && emDaChave === cnpj)
+    }
     const autor = extrairCnpjAutorEventoNFe(xml)
     return Boolean(autor && autor === cnpj)
   }
@@ -256,11 +276,11 @@ export function inferirTipoArquivoDistDfe(schema: string, xml: string): DistDfeA
   if (s.includes('resevento') || s.includes('proceventonfe') || s.includes('procevento')) return 'evento'
   if (s.includes('evento')) return 'evento'
 
-  const head = (xml ?? '').trimStart().slice(0, 500)
-  if (/<(?:[\w.-]+:)?nfeProc\b/i.test(head)) return 'procNFe'
-  if (/<(?:[\w.-]+:)?procEventoNFe\b/i.test(head)) return 'evento'
-  if (/<(?:[\w.-]+:)?resNFe\b/i.test(head)) return 'resNFe'
-  if (/<(?:[\w.-]+:)?resEvento\b/i.test(head)) return 'evento'
+  const x = xml ?? ''
+  if (/<(?:[\w.-]+:)?nfeProc\b/i.test(x)) return 'procNFe'
+  if (/<(?:[\w.-]+:)?procEventoNFe\b/i.test(x)) return 'evento'
+  if (/<(?:[\w.-]+:)?resNFe\b/i.test(x)) return 'resNFe'
+  if (/<(?:[\w.-]+:)?resEvento\b/i.test(x)) return 'evento'
   return 'outro'
 }
 
