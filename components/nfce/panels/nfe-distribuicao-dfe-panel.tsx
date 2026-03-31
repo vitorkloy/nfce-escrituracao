@@ -355,13 +355,6 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
                 {' '}
                 <strong>{formatarTempoRestante((nfeBlockTimer?.retryAtMs ?? 0) - agoraMs)}</strong>
               </span>
-              <button
-                type="button"
-                onClick={() => void limparBloqueioSeHouver()}
-                className="text-xs text-[var(--teal)] underline no-drag"
-              >
-                Limpar timer
-              </button>
             </div>
           ) : (
             <p className="text-xs text-[var(--text-muted)]">
@@ -377,7 +370,10 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
             Loop por <strong>NSU</strong> (até 50 documentos por lote): grava em{' '}
             <code className="text-[11px]">pasta/CNPJ/ANO/MÊS/chave.xml</code>. O último NSU fica em{' '}
             <code className="text-[11px]">.nfe-dist-state.json</code> dentro da pasta do CNPJ — na próxima execução só
-            busca notas novas. Arquivos já existentes não são sobrescritos.
+            busca notas novas. Arquivos já existentes não são sobrescritos. A fila da AN pode trazer{' '}
+            <strong>resNFe</strong> (resumo), <strong>procNFe</strong> (NF-e autorizada completa, quando disponível) e{' '}
+            <strong>resEvento</strong> — não é todo lote que inclui XML completo de nota; veja o campo{' '}
+            <code className="text-[10px]">tiposSchema</code> em <code className="text-[10px]">sync-debug.log</code>.
           </p>
 
           <div className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-[var(--text-secondary)] space-y-1.5 max-w-3xl">

@@ -45,23 +45,31 @@ export function extrairTagTextoLocal(xml: string, localName: string): string {
   return (m?.[1] ?? '').trim()
 }
 
-/** Decodifica conteúdo docZip: Base64 + GZip → UTF-8. */
+/** Decodifica conteúdo docZip: Base64 + compactação → UTF-8 (AN costuma usar gzip). */
 export function decodificarDocZipBase64Gzip(base64: string): string {
   const buf = Buffer.from(base64.replace(/\s/g, ''), 'base64')
-  return zlib.gunzipSync(buf).toString('utf-8')
+  try {
+    return zlib.gunzipSync(buf).toString('utf-8')
+  } catch {
+    try {
+      return zlib.inflateSync(buf).toString('utf-8')
+    } catch {
+      return zlib.inflateRawSync(buf).toString('utf-8')
+    }
+  }
 }
 
-/** Lista elementos docZip (atributos NSU e schema + texto interno). */
+/** Lista elementos docZip (atributos NSU e schema + texto interno). Aceita prefixo de namespace. */
 function extrairDocZips(retXml: string): DocZipItem[] {
   const out: DocZipItem[] = []
-  const re = /<docZip\s+([^>]+)>([\s\S]*?)<\/docZip>/gi
+  const re = /<(?:[\w.-]+:)?docZip\b([^>]*)>([\s\S]*?)<\/(?:[\w.-]+:)?docZip>/gi
   let m: RegExpExecArray | null
   while ((m = re.exec(retXml)) !== null) {
     const attrs = m[1]
     const body = m[2].trim()
     const nsuM =
       attrs.match(/\bNSU\s*=\s*["']([^"']+)["']/i) ?? attrs.match(/\bnsu\s*=\s*["']([^"']+)["']/i)
-    const schM = attrs.match(/schema\s*=\s*["']([^"']+)["']/i)
+    const schM = attrs.match(/\bschema\s*=\s*["']([^"']+)["']/i)
     const nsu = (nsuM?.[1] ?? '').trim()
     const schema = (schM?.[1] ?? 'doc').trim()
     if (!body) continue
@@ -128,11 +136,13 @@ export function parsearRetDistDfeInt(retXml: string): RetDistDfeParseado {
 
 const CHAVE_44 = /\b(\d{44})\b/
 
-/** Primeira chave de 44 dígitos no XML (infNFe Id, chNFe, etc.). */
+/** Primeira chave de 44 dígitos no XML (infNFe Id, chNFe, resNFe, procNFe, etc.). */
 export function extrairChaveAcesso44(xml: string): string | undefined {
   const id = xml.match(/Id\s*=\s*["']NFe(\d{44})["']/i)
   if (id?.[1]) return id[1]
-  const ch = xml.match(/<chNFe>(\d{44})<\/chNFe>/i)
+  const idPref = xml.match(/Id\s*=\s*["'][^"']*NFe(\d{44})["']/i)
+  if (idPref?.[1]) return idPref[1]
+  const ch = xml.match(/<(?:[\w.-]+:)?chNFe>(\d{44})<\/(?:[\w.-]+:)?chNFe>/i)
   if (ch?.[1]) return ch[1]
   const any = xml.match(CHAVE_44)
   return any?.[1]
@@ -140,17 +150,41 @@ export function extrairChaveAcesso44(xml: string): string | undefined {
 
 /** Ano e mês (YYYY, MM) a partir de dhEmi / dEmi. */
 export function extrairAnoMesEmissao(xml: string): { ano: string; mes: string } | null {
-  const tagComPrefixo = (localName: 'dhEmi' | 'dEmi') => {
+  const tagComPrefixo = (localName: string) => {
     const m = xml.match(
       new RegExp(`<(?:[\\w.-]+:)?${localName}>([^<]+)</(?:[\\w.-]+:)?${localName}>`, 'i')
     )
     return m?.[1]
   }
-  const dh = tagComPrefixo('dhEmi') ?? tagComPrefixo('dEmi')
-  if (!dh) return null
-  const iso = dh.trim()
-  const y = iso.slice(0, 4)
-  const m = iso.slice(5, 7)
-  if (/^\d{4}$/.test(y) && /^\d{2}$/.test(m)) return { ano: y, mes: m }
+  const candidatos = [
+    tagComPrefixo('dhEmi'),
+    tagComPrefixo('dEmi'),
+    tagComPrefixo('dhRecbto'),
+    tagComPrefixo('dhReg'),
+  ].filter(Boolean) as string[]
+  for (const raw of candidatos) {
+    const iso = raw.trim()
+    const y = iso.slice(0, 4)
+    const m = iso.slice(5, 7)
+    if (/^\d{4}$/.test(y) && /^\d{2}$/.test(m)) return { ano: y, mes: m }
+    const ymd = iso.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (ymd) return { ano: ymd[1], mes: ymd[2] }
+  }
   return null
+}
+
+/** Contagem por tipo de schema AN (para log/diag). */
+export function resumirTiposDocZipPorSchema(documentos: DocZipItem[]): string {
+  let procNFe = 0
+  let resNFe = 0
+  let evento = 0
+  let outro = 0
+  for (const d of documentos) {
+    const s = d.schema.toLowerCase()
+    if (s.includes('resevento') || s.includes('proceventonfe') || s.includes('evento')) evento++
+    else if (s.includes('procnfe')) procNFe++
+    else if (s.includes('resnfe')) resNFe++
+    else outro++
+  }
+  return `procNFe=${procNFe} resNFe=${resNFe} evento=${evento} outro=${outro}`
 }

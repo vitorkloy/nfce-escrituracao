@@ -12,6 +12,7 @@ import {
   maiorNsuDosDocumentos,
   maxNsuValidoParaTerminoSincronia,
   parsearRetDistDfeInt,
+  resumirTiposDocZipPorSchema,
 } from './nfe-dist-dfe-parser'
 
 export interface NfeDistDfeSyncStateFile {
@@ -199,6 +200,7 @@ export async function sincronizarDistDfeNfe(params: {
         ultNSURetorno: ret.ultNSU,
         maxNSURetorno: ret.maxNSU,
         docZip: ret.documentos.length,
+        tiposSchema: resumirTiposDocZipPorSchema(ret.documentos),
       })
 
       if (ret.cStat === '656') {
