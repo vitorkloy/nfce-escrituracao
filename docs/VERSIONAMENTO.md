@@ -36,7 +36,8 @@ Fluxo sugerido:
 
 ## O que não é versão do app
 
-- **SAE-NFC-e v1.0.0** na UI = versão da **especificação / nota técnica** da SEFAZ, não do seu instalador.
+- O rótulo **SAE-\*** mostrado na UI identifica a versão interna/módulo exibida na interface e pode mudar conforme release.
+- A versão do **instalador/app** continua sendo exclusivamente o campo **`version`** do `package.json`.
 - **`VERSAO` em `electron/sefaz.ts`** = versão do **XML** enviado aos webservices (`1.00`), definida pela NT — independente da versão do app.
 
 ---

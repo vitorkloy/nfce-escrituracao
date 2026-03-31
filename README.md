@@ -103,11 +103,11 @@ $env:DEBUG="sefaz"; npm run dev
 
 ### Versão do aplicativo
 
-A versão exibida no app e no nome do `.exe` vem só do campo **`version`** em `package.json`. Fluxo completo: [docs/VERSIONAMENTO.md](docs/VERSIONAMENTO.md).
+A versão exibida no app e no nome do `.exe` vem só do campo **`version`** em `package.json`. Fluxo completo: [docs/NFC-e/VERSIONAMENTO.md](docs/NFC-e/VERSIONAMENTO.md).
 
 ### Gerar instalador `.exe`
 
-**Passo a passo completo:** [docs/GUIA-BUILD-EXE.md](docs/GUIA-BUILD-EXE.md)
+**Passo a passo completo:** [docs/NFC-e/GUIA-BUILD-EXE.md](docs/NFC-e/GUIA-BUILD-EXE.md)
 
 **Ícones:** obrigatórios em `public/` — `icon.ico` e `icon.png`, ou arquivos com `nfc` no nome (ex.: `NFC·e.ico` / `NFC·e.png`) que o build copia para esses nomes. Ver `public/README.md`.
 

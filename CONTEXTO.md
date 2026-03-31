@@ -6,9 +6,11 @@
 
 ## 1. VISÃO GERAL DO PROJETO
 
-Aplicativo desktop (.exe) para consultar e baixar XMLs de NFC-e da SEFAZ-SP.
+Aplicativo desktop (.exe) de escrituração fiscal com dois módulos: **NFC-e** e **NF-e**.
 Stack: Electron + Next.js 14 + TypeScript
-Especificação: Nota Técnica 2026 — SAE-NFC-e v1.0.0
+Escopo atual:
+- **NFC-e (SEFAZ-SP):** listagem, download individual, download em lote e relatório XLSX.
+- **NF-e (Ambiente Nacional):** Distribuição DFe, Recepção de Evento, sincronização por NSU e listagem de XMLs salvos.
 
 ---
 
@@ -17,14 +19,21 @@ Especificação: Nota Técnica 2026 — SAE-NFC-e v1.0.0
 ```
 nfce-escrituracao/
 ├── electron/
-│   ├── main.ts           # Processo principal: janela, IPC handlers, PowerShell
-│   ├── preload.ts        # contextBridge — expõe window.electron ao renderer
-│   ├── sefaz.ts          # Cliente SOAP: mTLS, XML, parse, paginação
-│   └── electron.d.ts     # Tipos TypeScript para window.electron
+│   ├── main.ts                 # Processo principal: janela, IPC handlers, certificados, NFC-e e NF-e
+│   ├── preload.ts              # contextBridge — expõe window.electron ao renderer
+│   ├── sefaz.ts                # Cliente SOAP NFC-e (SEFAZ-SP)
+│   ├── nfe.ts                  # Cliente SOAP NF-e (AN): DistDFe + Recepção Evento
+│   ├── nfe-dist-dfe-sync.ts    # Sincronização automática por NSU (NF-e)
+│   ├── nfe-dist-dfe-parser.ts  # Parser de retDistDFeInt
+│   ├── nfe-recepcao-evento-parser.ts
+│   └── nfe-list-xmls-local.ts  # Leitura de XMLs salvos em disco
 ├── app/
-│   ├── layout.tsx        # Layout raiz Next.js
-│   ├── page.tsx          # UI: sidebar + 3 painéis (Certificado/Listagem/Download)
-│   └── globals.css       # CSS variables, IBM Plex fonts
+│   ├── layout.tsx              # Layout raiz Next.js
+│   ├── page.tsx                # Shell da UI com troca de módulo
+│   └── globals.css             # CSS variables, IBM Plex fonts
+├── components/nfce/
+│   ├── shell/                  # Sidebar, seletor de módulo e navegação por módulo
+│   └── panels/                 # Painéis NFC-e e NF-e (Dist DFe / Recepção evento / etc.)
 ├── package.json
 ├── next.config.mjs       # output: export
 ├── tsconfig.json
@@ -176,11 +185,11 @@ new https.Agent({
 
 ## 9. STATUS ATUAL
 
-- SOAP 1.2 funcionando (NFCeListagemChaves, NFCeDownloadXML)
-- Retry para ECONNRESET, EPIPE, ETIMEDOUT
-- `parseTagValue: false` para chave de 44 dígitos (evita notação científica)
-- XMLBuilder para salvar XML válido (não JSON)
-- UX: overlay de loading com barra de progresso; confirmação ao fechar durante download; botão mostrar/ocultar senha; Verificar senha no modo arquivo; toast com mensagem real da SEFAZ
+- Módulo **NFC-e** funcional: SOAP 1.2 (NFCeListagemChaves, NFCeDownloadXML), download em lote, relatório XLSX e paginação automática.
+- Módulo **NF-e** funcional para os fluxos implementados: DistDFe (consulta XML livre/NSU), Recepção de Evento, sincronização automática por NSU e leitura de XMLs locais.
+- Retry para ECONNRESET, EPIPE, ETIMEDOUT.
+- `parseTagValue: false` para chave de 44 dígitos (evita notação científica).
+- UX: overlay de loading com barra de progresso, confirmação ao fechar durante operação, validação de certificado e toasts com mensagem da SEFAZ.
 
 ---
 
@@ -190,10 +199,13 @@ new https.Agent({
 {
   "scripts": {
     "dev": "tsc -p tsconfig.electron.json && concurrently -k \"next dev\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on http://localhost:3000 && electron .\"",
-    "build": "next build && tsc -p tsconfig.electron.json && electron-builder",
+    "icons": "node scripts/sync-brand-icons.cjs",
+    "build": "node scripts/sync-brand-icons.cjs && next build && tsc -p tsconfig.electron.json && electron-builder",
     "build:next": "next build",
     "build:electron": "tsc -p tsconfig.electron.json",
-    "wsdl": "node scripts/buscar-wsdl.js"
+    "dist": "npm run build",
+    "wsdl": "node scripts/buscar-wsdl.js",
+    "diagnostico:listagem": "node scripts/diagnostico-listagem.cjs"
   }
 }
 ```
@@ -237,6 +249,13 @@ new https.Agent({
 
 ---
 
+## 12.1 DOCUMENTAÇÃO DE REFERÊNCIA (build e versão)
+
+- Build do instalador: `docs/NFC-e/GUIA-BUILD-EXE.md`
+- Versionamento do app: `docs/NFC-e/VERSIONAMENTO.md`
+
+---
+
 ## 13. DEPENDÊNCIAS
 
 ```json
@@ -244,8 +263,11 @@ new https.Agent({
   "dependencies": {
     "axios": "^1.7.2",
     "electron-store": "^8.2.0",
+    "exceljs": "^4.4.0",
     "fast-xml-parser": "^4.4.0",
+    "ionicons": "^8.0.13",
     "next": "14.2.5",
+    "next-themes": "^0.4.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

@@ -57,7 +57,12 @@ export function MainPanelArea({
         )}
         {activeTab === 'download' && (
           <div className="h-full flex flex-col overflow-hidden">
-            <DownloadXmlPanel appModule={appModule} certificateState={certificateState} showToast={showToast} />
+            <DownloadXmlPanel
+              appModule={appModule}
+              certificateState={certificateState}
+              showToast={showToast}
+              onLoadingStateChange={onLoadingStateChange}
+            />
           </div>
         )}
         {activeTab === 'relatorio' && (

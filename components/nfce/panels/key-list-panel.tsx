@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { IonIcon } from '@ionic/react'
-import { downloadOutline, searchOutline, squareOutline } from 'ionicons/icons'
+import { copyOutline, downloadOutline, searchOutline, squareOutline } from 'ionicons/icons'
 import { useIsElectron } from '@/hooks/useIsElectron'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
@@ -149,6 +149,37 @@ export function KeyListPanel({ appModule, certificateState, showToast, onLoading
     )
   }
 
+  async function copyTextToClipboard(text: string): Promise<boolean> {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        return true
+      }
+    } catch {
+      // fallback abaixo
+    }
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.setAttribute('readonly', 'true')
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    } catch {
+      return false
+    }
+  }
+
+  async function copySingleKey(accessKey: string) {
+    const ok = await copyTextToClipboard(accessKey)
+    if (ok) showToast('ok', 'Chave copiada.')
+    else showToast('erro', 'Não foi possível copiar a chave.')
+  }
+
   const selectedKeys = keys.filter((item) => item.selecionada)
   const certificateCnpjNormalized = certificateCnpjDigits.replace(/\D/g, '')
 
@@ -176,6 +207,21 @@ export function KeyListPanel({ appModule, certificateState, showToast, onLoading
     ? keys.filter((item) => item.chave.includes(keyFilterText))
     : keys
   const visibleRows = afterTextFilter.filter((item) => matchesEmitenteFilter(item.chave))
+
+  async function copyBatchKeys() {
+    const keysToCopy = (selectedKeys.length > 0 ? selectedKeys : visibleRows).map((item) => item.chave)
+    if (keysToCopy.length === 0) {
+      showToast('info', 'Nenhuma chave disponível para copiar.')
+      return
+    }
+    const ok = await copyTextToClipboard(keysToCopy.join('\n'))
+    if (!ok) {
+      showToast('erro', 'Não foi possível copiar as chaves.')
+      return
+    }
+    const origem = selectedKeys.length > 0 ? 'selecionadas' : 'visíveis'
+    showToast('ok', `${keysToCopy.length} chave(s) ${origem} copiada(s).`)
+  }
 
   async function downloadBatchXmlImpl(relatorioModo: 'agora' | 'depois') {
     if (appModule === 'nfe') {
@@ -379,6 +425,14 @@ export function KeyListPanel({ appModule, certificateState, showToast, onLoading
                   })()}
                 <button
                   type="button"
+                  onClick={copyBatchKeys}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 text-xs ${BUTTON_TEAL_GHOST_CLASS}`}
+                >
+                  <IonIcon icon={copyOutline} className="w-3.5 h-3.5" />
+                  Copiar chaves ({selectedKeys.length})
+                </button>
+                <button
+                  type="button"
                   onClick={requestDownloadWithReport}
                   className={`flex items-center gap-1.5 px-4 py-1.5 text-xs ${BUTTON_TEAL_GHOST_CLASS}`}
                 >
@@ -386,6 +440,16 @@ export function KeyListPanel({ appModule, certificateState, showToast, onLoading
                   Baixar XMLs ({selectedKeys.length})
                 </button>
               </div>
+            )}
+            {selectedKeys.length === 0 && visibleRows.length > 0 && (
+              <button
+                type="button"
+                onClick={copyBatchKeys}
+                className={`ml-auto flex items-center gap-1.5 px-4 py-1.5 text-xs ${BUTTON_TEAL_GHOST_CLASS}`}
+              >
+                <IonIcon icon={copyOutline} className="w-3.5 h-3.5" />
+                Copiar chaves visíveis ({visibleRows.length})
+              </button>
             )}
           </div>
           {certificateCnpjNormalized && (
@@ -432,6 +496,11 @@ export function KeyListPanel({ appModule, certificateState, showToast, onLoading
                 >
                   Chave de Acesso
                 </th>
+                <th
+                  className="px-4 py-3 text-left text-xs uppercase tracking-widest w-28 text-[var(--text-muted)]"
+                >
+                  Ações
+                </th>
                 {certificateCnpjNormalized && (
                   <th
                     className="px-4 py-3 text-left text-xs uppercase tracking-widest w-40 text-[var(--text-muted)]"
@@ -472,6 +541,20 @@ export function KeyListPanel({ appModule, certificateState, showToast, onLoading
                       {index + 1}
                     </td>
                     <td className="px-4 py-2.5 chave-acesso">{formatAccessKeyForDisplay(item.chave)}</td>
+                    <td className="px-4 py-2.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void copySingleKey(item.chave)
+                        }}
+                        className={`flex items-center gap-1 px-2.5 py-1 text-xs ${BUTTON_TEAL_GHOST_CLASS}`}
+                        aria-label={`Copiar chave ${item.chave}`}
+                      >
+                        <IonIcon icon={copyOutline} className="w-3.5 h-3.5" />
+                        Copiar
+                      </button>
+                    </td>
                     {certificateCnpjNormalized && (
                       <td className="px-4 py-2.5">
                         {isMatriz ? (
