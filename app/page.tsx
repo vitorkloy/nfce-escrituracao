@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { AppSidebar, MainPanelArea, ModulePickerScreen } from '@/components/nfce/shell'
+import { AppSidebar, MainPanelArea } from '@/components/nfce/shell'
 import { LoadingOverlay } from '@/components/nfce/ui/loading-overlay'
 import { ToastStack } from '@/components/nfce/ui/toast-stack'
 import { useCertificatePersistence } from '@/hooks/use-certificate-persistence'
@@ -57,10 +57,6 @@ export default function Home() {
   useEffect(() => {
     if (loadingUi.type !== 'listagem') setIsCancellingListagem(false)
   }, [loadingUi.type])
-
-  if (isElectron && !appModule) {
-    return <ModulePickerScreen onSelectModule={(m) => void escolherModulo(m)} />
-  }
 
   return (
     <div className="flex h-screen select-none bg-[var(--bg-deep)]">

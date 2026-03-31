@@ -129,6 +129,34 @@ function formatarCnpjRelatorioDigitos(raw: string | undefined): string {
   return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12, 14)}`
 }
 
+function parseValorMonetarioRelatorio(raw: string | undefined): number | null {
+  if (!raw) return null
+  const limpo = raw.trim()
+  if (!limpo) return null
+  // Aceita "1234.56" e "1234,56" para gravar como número real no XLSX.
+  const normalizado = limpo.replace(/\./g, '').replace(',', '.')
+  const n = Number(normalizado)
+  return Number.isFinite(n) ? n : null
+}
+
+function limparNomeArquivo(base: string): string {
+  const semInvalidos = base.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim()
+  return semInvalidos.replace(/[. ]+$/g, '') || 'empresa-sem-nome'
+}
+
+function montarNomesArquivosRelatorio(cabecalhoEmpresa?: CabecalhoEmpresaRelatorio): {
+  aprovado: string
+  cancelado: string
+} {
+  const nome = (cabecalhoEmpresa?.nome ?? '').trim() || 'empresa-sem-nome'
+  const cnpj = (cabecalhoEmpresa?.cnpj ?? '').replace(/\D/g, '') || 'sem-cnpj'
+  const base = limparNomeArquivo(`${nome} - ${cnpj}`)
+  return {
+    aprovado: `${base} - comparativo_aprovado.xlsx`,
+    cancelado: `${base} - comparativo_cancelamento.xlsx`,
+  }
+}
+
 /** Razão social e CNPJ do emitente no XML da NFC-e. */
 function extrairEmitenteDoNfceXml(xmlStr: string): CabecalhoEmpresaRelatorio {
   const m = xmlStr.match(/<emit>([\s\S]*?)<\/emit>/)
@@ -169,7 +197,8 @@ async function gerarComparativoXlsxBuffer(
   }
 
   for (const l of linhas) {
-    const row = ws.addRow([l.nNF ?? '', l.dhEmi ?? '', l.vNF ?? ''])
+    const vNfNumero = parseValorMonetarioRelatorio(l.vNF)
+    const row = ws.addRow([l.nNF ?? '', l.dhEmi ?? '', vNfNumero ?? l.vNF ?? ''])
     row.getCell(1).numFmt = '@'
     row.getCell(3).numFmt = '#,##0.00'
   }
@@ -1085,13 +1114,14 @@ ipcMain.handle(
         const linhasCanceladas = relatorioLinhas.filter((l) => l.cancelada)
         const xlsxAprovado = await gerarComparativoXlsxBuffer(linhasAprovadas, cabecalhoEmpresaRelatorio)
         const xlsxCancelamento = await gerarComparativoXlsxBuffer(linhasCanceladas, cabecalhoEmpresaRelatorio)
-        fs.writeFileSync(path.join(pastaSaida, 'comparativo_aprovado.xlsx'), xlsxAprovado)
-        fs.writeFileSync(path.join(pastaSaida, 'comparativo_cancelamento.xlsx'), xlsxCancelamento)
+        const nomesArquivos = montarNomesArquivosRelatorio(cabecalhoEmpresaRelatorio)
+        fs.writeFileSync(path.join(pastaSaida, nomesArquivos.aprovado), xlsxAprovado)
+        fs.writeFileSync(path.join(pastaSaida, nomesArquivos.cancelado), xlsxCancelamento)
         return {
           ok: true,
           resultados,
           relatorio: {
-            arquivos: ['comparativo_aprovado.xlsx', 'comparativo_cancelamento.xlsx'],
+            arquivos: [nomesArquivos.aprovado, nomesArquivos.cancelado],
             gerados: relatorioLinhas.length,
             aprovados: linhasAprovadas.length,
             cancelados: linhasCanceladas.length,
@@ -1423,12 +1453,13 @@ ipcMain.handle('relatorio:comparativo-xlsx', async (_e, pastaSaida: string) => {
 
     const xlsxAprovado = await gerarComparativoXlsxBuffer(linhasAprovadas, cabecalhoEmpresa)
     const xlsxCancelamento = await gerarComparativoXlsxBuffer(linhasCanceladas, cabecalhoEmpresa)
-    fs.writeFileSync(path.join(pastaSaida, 'comparativo_aprovado.xlsx'), xlsxAprovado)
-    fs.writeFileSync(path.join(pastaSaida, 'comparativo_cancelamento.xlsx'), xlsxCancelamento)
+    const nomesArquivos = montarNomesArquivosRelatorio(cabecalhoEmpresa)
+    fs.writeFileSync(path.join(pastaSaida, nomesArquivos.aprovado), xlsxAprovado)
+    fs.writeFileSync(path.join(pastaSaida, nomesArquivos.cancelado), xlsxCancelamento)
 
     return {
       ok: true,
-      arquivos: ['comparativo_aprovado.xlsx', 'comparativo_cancelamento.xlsx'],
+      arquivos: [nomesArquivos.aprovado, nomesArquivos.cancelado],
       gerados: linhas.length,
       aprovados: linhasAprovadas.length,
       cancelados: linhasCanceladas.length,
