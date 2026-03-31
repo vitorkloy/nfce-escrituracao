@@ -140,7 +140,13 @@ export function extrairChaveAcesso44(xml: string): string | undefined {
 
 /** Ano e mês (YYYY, MM) a partir de dhEmi / dEmi. */
 export function extrairAnoMesEmissao(xml: string): { ano: string; mes: string } | null {
-  const dh = xml.match(/<dhEmi>([^<]+)<\/dhEmi>/i)?.[1] ?? xml.match(/<dEmi>([^<]+)<\/dEmi>/i)?.[1]
+  const tagComPrefixo = (localName: 'dhEmi' | 'dEmi') => {
+    const m = xml.match(
+      new RegExp(`<(?:[\\w.-]+:)?${localName}>([^<]+)</(?:[\\w.-]+:)?${localName}>`, 'i')
+    )
+    return m?.[1]
+  }
+  const dh = tagComPrefixo('dhEmi') ?? tagComPrefixo('dEmi')
   if (!dh) return null
   const iso = dh.trim()
   const y = iso.slice(0, 4)

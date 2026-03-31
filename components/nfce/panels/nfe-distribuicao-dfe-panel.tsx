@@ -241,6 +241,15 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
       showToast('erro', 'Informe o CNPJ com 14 dígitos.')
       return
     }
+    const cnpjInformado = cnpj.replace(/\D/g, '')
+    const cnpjCert = (certificateState.certificadoCnpj ?? '').replace(/\D/g, '')
+    if (cnpjCert.length === 14 && cnpjInformado !== cnpjCert) {
+      showToast(
+        'erro',
+        'O CNPJ informado difere do CNPJ do certificado selecionado. Use o mesmo CNPJ do certificado para sincronizar.'
+      )
+      return
+    }
     if (!/^\d{2}$/.test(cUFAutor.replace(/\D/g, ''))) {
       showToast('erro', 'cUFAutor inválido.')
       return

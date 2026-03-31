@@ -20,18 +20,30 @@ export function listarXmlsNfeSalvos(
 
   const out: NfeXmlSalvoInfo[] = []
 
+  const filtrarAno = (ano: string) => {
+    if (!filtro?.ano) return true
+    return filtro.ano === ano
+  }
+
+  const filtrarMes = (mes: string) => {
+    if (!filtro?.mes) return true
+    return filtro.mes === mes
+  }
+
   for (const anoEnt of fs.readdirSync(base, { withFileTypes: true })) {
     if (!anoEnt.isDirectory()) continue
     const ano = anoEnt.name
-    if (!/^\d{4}$/.test(ano)) continue
-    if (filtro?.ano && filtro.ano !== ano) continue
+    const anoEhPadrao = /^\d{4}$/.test(ano)
+    if (!anoEhPadrao && ano !== 'sem-data') continue
+    if (!filtrarAno(ano)) continue
 
     const anoPath = path.join(base, ano)
     for (const mesEnt of fs.readdirSync(anoPath, { withFileTypes: true })) {
       if (!mesEnt.isDirectory()) continue
       const mes = mesEnt.name
-      if (!/^\d{2}$/.test(mes)) continue
-      if (filtro?.mes && filtro.mes !== mes) continue
+      const mesEhPadrao = /^\d{2}$/.test(mes)
+      if (!mesEhPadrao && mes !== '00') continue
+      if (!filtrarMes(mes)) continue
 
       const mesPath = path.join(anoPath, mes)
       for (const arq of fs.readdirSync(mesPath, { withFileTypes: true })) {
