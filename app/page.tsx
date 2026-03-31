@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AppSidebar, MainPanelArea, ModulePickerScreen } from '@/components/nfce/shell'
 import { LoadingOverlay } from '@/components/nfce/ui/loading-overlay'
 import { ToastStack } from '@/components/nfce/ui/toast-stack'
@@ -18,6 +18,7 @@ export default function Home() {
 
   const [activeTab, setActiveTab] = useState<AppTab>('config')
   const [loadingUi, setLoadingUi] = useState<LoadingUiState>({ type: null })
+  const [isCancellingListagem, setIsCancellingListagem] = useState(false)
 
   const resolvedModule: AppModule = appModule ?? 'nfce'
 
@@ -41,6 +42,21 @@ export default function Home() {
     },
     [isElectron, persistModuleSelection, showToast],
   )
+
+  const cancelarBuscaListagem = useCallback(async () => {
+    if (!isElectron || loadingUi.type !== 'listagem' || isCancellingListagem) return
+    try {
+      setIsCancellingListagem(true)
+      await window.electron.sefaz.cancelarListagem()
+      showToast('info', 'Cancelando busca...')
+    } catch {
+      showToast('erro', 'Não foi possível cancelar a busca.')
+    }
+  }, [isElectron, loadingUi.type, isCancellingListagem, showToast])
+
+  useEffect(() => {
+    if (loadingUi.type !== 'listagem') setIsCancellingListagem(false)
+  }, [loadingUi.type])
 
   if (isElectron && !appModule) {
     return <ModulePickerScreen onSelectModule={(m) => void escolherModulo(m)} />
@@ -76,6 +92,8 @@ export default function Home() {
           current={loadingUi.atual}
           total={loadingUi.total}
           label={loadingUi.type === 'listagem' ? 'Buscando chaves…' : 'Baixando XMLs…'}
+          onCancel={loadingUi.type === 'listagem' ? () => void cancelarBuscaListagem() : undefined}
+          cancelDisabled={loadingUi.type === 'listagem' ? isCancellingListagem : undefined}
         />
       )}
     </div>

@@ -19,17 +19,11 @@ const VERSAO    = '1.00'
 const NAMESPACE = 'http://www.portalfiscal.inf.br/nfe'
 
 const ENDPOINTS = {
-  homologacao: {
-    listagem: 'https://homologacao.nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx',
-    download: 'https://homologacao.nfce.fazenda.sp.gov.br/ws/NFCeDownloadXML.asmx',
-  },
-  producao: {
-    listagem: 'https://nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx',
-    download: 'https://nfce.fazenda.sp.gov.br/ws/NFCeDownloadXML.asmx',
-  },
+  listagem: 'https://nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx',
+  download: 'https://nfce.fazenda.sp.gov.br/ws/NFCeDownloadXML.asmx',
 } as const
 
-const TP_AMB = { producao: '1', homologacao: '2' } as const
+const TP_AMB = '1' as const
 
 /** Códigos que indicam sucesso (com ou sem ressalvas) */
 const CODIGOS_SUCESSO = new Set(['100', '101', '107', '200'])
@@ -41,7 +35,7 @@ const MAX_PAGINAS = 200
 // Tipos
 // ---------------------------------------------------------------------------
 
-export type Ambiente = 'homologacao' | 'producao'
+export type Ambiente = 'producao'
 
 export interface ConfigCert {
   pfxPath: string
@@ -113,6 +107,14 @@ export class SefazParseError extends Error {
   constructor(mensagem: string, public readonly xmlRecebido?: string) {
     super(mensagem)
     this.name = 'SefazParseError'
+  }
+}
+
+/** Cancelamento solicitado pela UI durante operações longas (ex.: paginação). */
+export class SefazCancelError extends Error {
+  constructor(mensagem = 'Operação cancelada pelo usuário.') {
+    super(mensagem)
+    this.name = 'SefazCancelError'
   }
 }
 
@@ -219,7 +221,8 @@ async function postSoap(
   url: string,
   acao: string,
   xmlCorpo: string,
-  agente: https.Agent
+  agente: https.Agent,
+  options?: { signal?: AbortSignal; shouldCancel?: () => boolean }
 ): Promise<string> {
   const envelope = soapEnvelope(acao, xmlCorpo)
 
@@ -235,6 +238,7 @@ async function postSoap(
   let ultimoErro: unknown
 
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    if (options?.shouldCancel?.()) throw new SefazCancelError()
     try {
       const resp = await axios.post(url, envelope, {
         headers: {
@@ -244,6 +248,7 @@ async function postSoap(
         httpsAgent: agente,
         timeout: 60_000,
         responseType: 'text',
+        signal: options?.signal,
       })
 
       if (!resp.data || typeof resp.data !== 'string') {
@@ -257,8 +262,10 @@ async function postSoap(
       ultimoErro = err
 
       if (err instanceof SefazParseError || err instanceof SefazNetworkError) throw err
+      if (options?.shouldCancel?.()) throw new SefazCancelError()
 
       if (err instanceof AxiosError) {
+        if (err.code === 'ERR_CANCELED') throw new SefazCancelError()
         const code = err.code ?? ''
 
         // Erros transitórios: faz retry com backoff
@@ -524,7 +531,8 @@ function parseDownload(xmlStr: string): ResultadoDownload {
 export async function listarChaves(
   config: ConfigCert,
   dataInicial: string,
-  dataFinal?: string
+  dataFinal?: string,
+  options?: { signal?: AbortSignal; shouldCancel?: () => boolean }
 ): Promise<ResultadoListagem> {
   validarDataHora(dataInicial, 'dataHoraInicial')
   if (dataFinal) validarDataHora(dataFinal, 'dataHoraFinal')
@@ -534,10 +542,10 @@ export async function listarChaves(
   }
 
   const agente  = criarAgente(config.pfxPath, config.senha)
-  const tpAmb   = TP_AMB[config.ambiente]
-  const url     = ENDPOINTS[config.ambiente].listagem
+  const tpAmb   = TP_AMB
+  const url     = ENDPOINTS.listagem
   const xml     = xmlListagem(tpAmb, dataInicial, dataFinal)
-  const resposta = await postSoap(url, 'NFCeListagemChaves', xml, agente)
+  const resposta = await postSoap(url, 'NFCeListagemChaves', xml, agente, options)
   return parseListagem(resposta)
 }
 
@@ -549,8 +557,8 @@ export async function downloadXml(
   validarChave(chave)
 
   const agente   = agenteExterno ?? criarAgente(config.pfxPath, config.senha)
-  const tpAmb    = TP_AMB[config.ambiente]
-  const url      = ENDPOINTS[config.ambiente].download
+  const tpAmb    = TP_AMB
+  const url      = ENDPOINTS.download
   const xml      = xmlDownload(tpAmb, chave)
   const resposta = await postSoap(url, 'NFCeDownloadXML', xml, agente)
   return parseDownload(resposta)
@@ -565,7 +573,9 @@ export async function listarTodasChaves(
   config: ConfigCert,
   dataInicial: string,
   dataFinal?: string,
-  onProgresso?: (parcial: number) => void
+  onProgresso?: (parcial: number) => void,
+  shouldCancel?: () => boolean,
+  signal?: AbortSignal
 ): Promise<string[]> {
   const todasChaves: string[] = []
   let di    = dataInicial
@@ -573,7 +583,8 @@ export async function listarTodasChaves(
   let ultimodhEmis: string | undefined
 
   while (pagina <= MAX_PAGINAS) {
-    const resultado = await listarChaves(config, di, dataFinal)
+    if (shouldCancel?.()) throw new SefazCancelError()
+    const resultado = await listarChaves(config, di, dataFinal, { signal, shouldCancel })
     todasChaves.push(...resultado.chaves)
     onProgresso?.(todasChaves.length)
 

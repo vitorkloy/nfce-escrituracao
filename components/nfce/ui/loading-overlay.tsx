@@ -11,11 +11,15 @@ export function LoadingOverlay({
   current,
   total,
   label,
+  onCancel,
+  cancelDisabled,
 }: {
   kind: OverlayKind
   current?: number
   total?: number
   label?: string
+  onCancel?: () => void
+  cancelDisabled?: boolean
 }) {
   const hasProgress = total != null && total > 0 && typeof current === 'number'
   const percent = hasProgress ? Math.round((current! / total!) * 100) : 0
@@ -50,6 +54,16 @@ export function LoadingOverlay({
       <p className="text-xs max-w-xs text-center text-[var(--text-muted)]">
         Não feche a janela — o processo será interrompido.
       </p>
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={cancelDisabled}
+          className="px-4 py-2 text-sm rounded border border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-secondary)] disabled:opacity-70"
+        >
+          {cancelDisabled ? 'Cancelando...' : 'Cancelar busca'}
+        </button>
+      )}
     </div>
   )
 }

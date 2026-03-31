@@ -15,7 +15,7 @@ interface CertConfig {
   pfxPath: string
   thumbprint?: string
   origemStore: boolean
-  ambiente: 'homologacao' | 'producao'
+  ambiente: 'producao'
 }
 
 interface SefazConfig extends CertConfig {
@@ -118,6 +118,14 @@ interface ProgressoLote {
   chave: string
 }
 
+interface NfeBlockTimer {
+  certId: string
+  cnpj14?: string
+  blockedAtMs: number
+  retryAtMs: number
+  cStat: '656'
+}
+
 type ThemePreference = 'light' | 'dark' | 'system'
 type AppModule = 'nfce' | 'nfe'
 
@@ -141,6 +149,7 @@ declare global {
           dataFinal: string | undefined,
           paginacaoAuto: boolean
         ): Promise<ResultadoListagem>
+        cancelarListagem(): Promise<boolean>
         downloadXml(config: SefazConfig, chave: string): Promise<ResultadoDownload>
         downloadLote(
           config: SefazConfig,
@@ -224,6 +233,9 @@ declare global {
         getVersion(): Promise<string>
         /** Valida módulo na sessão (não persiste — nova escolha a cada abertura do app). */
         setModulo(modulo: AppModule): Promise<boolean>
+        setNfeBlockTimer(payload: NfeBlockTimer): Promise<boolean>
+        getNfeBlockTimer(certId: string): Promise<NfeBlockTimer | null>
+        clearNfeBlockTimer(certId: string): Promise<boolean>
       }
       ui: {
         getTheme(): Promise<ThemePreference>

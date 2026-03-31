@@ -6,10 +6,10 @@
  *
  * Uso:
  *   npm run build:electron
- *   node scripts/diagnostico-listagem.cjs [--rapido] <caminho.pfx> <senha> <homologacao|producao> <dataInicial> [dataFinal]
+ *   node scripts/diagnostico-listagem.cjs [--rapido] <caminho.pfx> <senha> <dataInicial> [dataFinal]
  *
  * Exemplo:
- *   node scripts/diagnostico-listagem.cjs "C:\\certs\\empresa.pfx" "senha" homologacao 2026-01-01T00:00 2026-03-25T23:59
+ *   node scripts/diagnostico-listagem.cjs "C:\\certs\\empresa.pfx" "senha" 2026-01-01T00:00 2026-03-25T23:59
  *
  * --rapido = uma única página (sem paginação automática por cStat 101)
  */
@@ -24,7 +24,7 @@ const rapido = process.argv.slice(2).includes('--rapido')
 function uso() {
   console.error(`
 Uso:
-  node scripts/diagnostico-listagem.cjs [--rapido] <pfx> <senha> <homologacao|producao> <dataInicial> [dataFinal]
+  node scripts/diagnostico-listagem.cjs [--rapido] <pfx> <senha> <dataInicial> [dataFinal]
 
   dataInicial/dataFinal: formato AAAA-MM-DDThh:mm (16 caracteres, como no app)
 
@@ -32,17 +32,12 @@ Variável opcional: set DEBUG= (vazio) para silenciar o dump SOAP.
 `)
 }
 
-if (argv.length < 4) {
+if (argv.length < 3) {
   uso()
   process.exit(1)
 }
 
-const [pfxPath, senha, ambienteRaw, dataInicial, dataFinal] = argv
-const ambiente = ambienteRaw === 'producao' || ambienteRaw === 'homologacao' ? ambienteRaw : null
-if (!ambiente) {
-  console.error('Ambiente inválido. Use homologacao ou producao.')
-  process.exit(1)
-}
+const [pfxPath, senha, dataInicial, dataFinal] = argv
 
 function extrairCNPJDaChave(chave) {
   if (!chave || chave.length < 20) return ''
@@ -64,11 +59,11 @@ try {
   process.exit(1)
 }
 
-const config = { pfxPath, senha, ambiente }
+const config = { pfxPath, senha, ambiente: 'producao' }
 
 async function main() {
   console.log('[diagnostico] DEBUG=', process.env.DEBUG || '(off)')
-  console.log('[diagnostico] Ambiente=', ambiente, '| Período=', dataInicial, '→', dataFinal || '(sem fim)')
+  console.log('[diagnostico] Ambiente= producao | Período=', dataInicial, '→', dataFinal || '(sem fim)')
 
   let chaves
   let meta = {}

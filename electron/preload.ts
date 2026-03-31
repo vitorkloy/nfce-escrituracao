@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld('electron', {
       pfxPath: string
       thumbprint?: string
       origemStore: boolean
-      ambiente: 'homologacao' | 'producao'
+      ambiente: 'producao'
     }) => ipcRenderer.invoke('cert:salvar-config', config),
 
     carregarConfig: () =>
@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('electron', {
       dataFinal: string | undefined,
       paginacaoAuto: boolean
     ) => ipcRenderer.invoke('sefaz:listar-chaves', config, dataInicial, dataFinal, paginacaoAuto),
+    cancelarListagem: () => ipcRenderer.invoke('sefaz:cancelar-listagem') as Promise<boolean>,
 
     downloadXml: (config: ConfigCert & { thumbprint?: string }, chave: string) =>
       ipcRenderer.invoke('sefaz:download-xml', config, chave),
@@ -114,6 +115,23 @@ contextBridge.exposeInMainWorld('electron', {
     setBusy: (busy: boolean) => ipcRenderer.send('app:set-busy', busy),
     getVersion: () => ipcRenderer.invoke('app:get-version') as Promise<string>,
     setModulo: (modulo: 'nfce' | 'nfe') => ipcRenderer.invoke('app:set-modulo', modulo) as Promise<boolean>,
+    setNfeBlockTimer: (payload: {
+      certId: string
+      cnpj14?: string
+      blockedAtMs: number
+      retryAtMs: number
+      cStat: '656'
+    }) => ipcRenderer.invoke('app:set-nfe-block-timer', payload) as Promise<boolean>,
+    getNfeBlockTimer: (certId: string) =>
+      ipcRenderer.invoke('app:get-nfe-block-timer', certId) as Promise<{
+        certId: string
+        cnpj14?: string
+        blockedAtMs: number
+        retryAtMs: number
+        cStat: '656'
+      } | null>,
+    clearNfeBlockTimer: (certId: string) =>
+      ipcRenderer.invoke('app:clear-nfe-block-timer', certId) as Promise<boolean>,
   },
 
   ui: {

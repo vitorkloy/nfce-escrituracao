@@ -72,10 +72,10 @@ page.tsx                   window.electron.*      ───►  main.ts IPC hand
 
 **IMPORTANTE: Os webservices usam SOAP 1.2 (não 1.1)**
 
-| Serviço | Homologação | Produção |
-|---------|-------------|----------|
-| NFCeListagemChaves | homologacao.nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx | nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx |
-| NFCeDownloadXML | homologacao.nfce.fazenda.sp.gov.br/ws/NFCeDownloadXML.asmx | nfce.fazenda.sp.gov.br/ws/NFCeDownloadXML.asmx |
+| Serviço | Produção |
+|---------|----------|
+| NFCeListagemChaves | nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx |
+| NFCeDownloadXML | nfce.fazenda.sp.gov.br/ws/NFCeDownloadXML.asmx |
 
 ---
 
@@ -108,7 +108,7 @@ Não usar SOAPAction como header separado — no SOAP 1.2 vai dentro do Content-
 ### NFCeListagemChaves
 ```xml
 <nfceListagemChaves versao="1.00">
-  <tpAmb>1</tpAmb>                          <!-- 1=Produção, 2=Homologação -->
+  <tpAmb>1</tpAmb>                          <!-- Produção (fixo no app) -->
   <dataHoraInicial>2026-03-01T00:00</dataHoraInicial>   <!-- NT 2026: 16 chars AAAA-MM-DDThh:mm -->
   <dataHoraFinal>2026-03-18T23:59</dataHoraFinal>       <!-- opcional -->
 </nfceListagemChaves>
@@ -251,8 +251,8 @@ new https.Agent({
 
 ## 12.1 DOCUMENTAÇÃO DE REFERÊNCIA (build e versão)
 
-- Build do instalador: `docs/NFC-e/GUIA-BUILD-EXE.md`
-- Versionamento do app: `docs/NFC-e/VERSIONAMENTO.md`
+- Build do instalador: `docs/GUIA-BUILD-EXE.md`
+- Versionamento do app: `docs/VERSIONAMENTO.md`
 
 ---
 

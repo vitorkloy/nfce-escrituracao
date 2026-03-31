@@ -25,7 +25,7 @@ export function ManualPanel() {
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
           <li>Acesse a aba <strong>Certificado</strong>.</li>
           <li>Escolha a origem: repositório do sistema ou arquivo `.pfx`.</li>
-          <li>Defina o ambiente: <strong>Homologação</strong> ou <strong>Produção</strong>.</li>
+          <li>O ambiente é fixo em <strong>Produção</strong> neste aplicativo.</li>
           <li>Se for arquivo, informe a senha do certificado.</li>
         </ul>
       </section>

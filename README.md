@@ -14,7 +14,7 @@
 - ⬇️ **Download de XML** completo + eventos (NFCeDownloadXML)
 - 📦 **Download em lote** — selecione N chaves e baixe todos os XMLs de uma vez
 - 📊 **Barra de progresso** durante busca e download — bloqueia interação e avisa ao fechar
-- 🌍 Suporte a **Homologação** e **Produção**
+- 🏭 Operação em **Produção** (NFC-e e NF-e)
 
 ---
 
@@ -103,11 +103,11 @@ $env:DEBUG="sefaz"; npm run dev
 
 ### Versão do aplicativo
 
-A versão exibida no app e no nome do `.exe` vem só do campo **`version`** em `package.json`. Fluxo completo: [docs/NFC-e/VERSIONAMENTO.md](docs/NFC-e/VERSIONAMENTO.md).
+A versão exibida no app e no nome do `.exe` vem só do campo **`version`** em `package.json`. Fluxo completo: [docs/VERSIONAMENTO.md](docs/VERSIONAMENTO.md).
 
 ### Gerar instalador `.exe`
 
-**Passo a passo completo:** [docs/NFC-e/GUIA-BUILD-EXE.md](docs/NFC-e/GUIA-BUILD-EXE.md)
+**Passo a passo completo:** [docs/GUIA-BUILD-EXE.md](docs/GUIA-BUILD-EXE.md)
 
 **Ícones:** obrigatórios em `public/` — `icon.ico` e `icon.png`, ou arquivos com `nfc` no nome (ex.: `NFC·e.ico` / `NFC·e.png`) que o build copia para esses nomes. Ver `public/README.md`.
 
@@ -137,16 +137,16 @@ Selecione o arquivo manualmente. **Senha obrigatória** — use o botão Verific
 
 ## 📡 Serviços SEFAZ-SP
 
-| Serviço | Homologação | Produção |
-|---------|-------------|----------|
-| NFCeListagemChaves | `homologacao.nfce.fazenda.sp.gov.br/ws/...` | `nfce.fazenda.sp.gov.br/ws/...` |
-| NFCeDownloadXML | `homologacao.nfce.fazenda.sp.gov.br/ws/...` | `nfce.fazenda.sp.gov.br/ws/...` |
+| Serviço | Produção |
+|---------|----------|
+| NFCeListagemChaves | `nfce.fazenda.sp.gov.br/ws/...` |
+| NFCeDownloadXML | `nfce.fazenda.sp.gov.br/ws/...` |
 
 ### NFeDistribuicaoDFe (Ambiente Nacional — NF-e)
 
 Este app também chama **NFeDistribuicaoDFe** na AN para distribuição por **NSU** (documentos autoriz para o CNPJ).
 
-- **Sempre produção** neste projeto: endpoint `www1.nfe.fazenda.gov.br` e `tpAmb=1` no XML `distDFeInt`. O seletor Homologação/Produção da interface vale para os **webservices NFC-e de São Paulo** acima; **não** altera a Distribuição DFe.
+- **Sempre produção** neste projeto: endpoint `www1.nfe.fazenda.gov.br` e `tpAmb=1` no XML `distDFeInt`.
 - Respostas usuais: `137` (lote com até 50 `docZip`), `138` (sem novos documentos). **`656`** = consumo indevido (NSU incorreto ou frequência excessiva; costuma exigir espera ~1 h).
 - Não substitui listagem por período (`NFCeListagemChaves`); o conjunto de documentos segue as regras da AN para NF-e/DF-e.
 - **NFeRecepcaoEvento4:** o conteúdo de `nfeDadosMsg` é envolvido em **CDATA** no SOAP (XML colado pode ter `&`, `<`, etc.). **NFeDistribuicaoDFe:** o `distDFeInt` vai **sem CDATA**, como filho XML literal, para evitar rejeição **243** (XML mal formado) na validação da AN.

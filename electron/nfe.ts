@@ -6,7 +6,7 @@
 import axios, { AxiosError } from 'axios'
 import type https from 'https'
 
-export type Ambiente = 'homologacao' | 'producao'
+export type Ambiente = 'producao'
 
 export interface ConfigCertNfe {
   pfxPath: string

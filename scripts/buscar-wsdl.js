@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Busca o WSDL do NFCeListagemChaves usando o certificado digital.
- * Uso: node scripts/buscar-wsdl.js <caminho.pfx> <senha> [homologacao|producao]
+ * Uso: node scripts/buscar-wsdl.js <caminho.pfx> <senha>
  *
  * O WSDL contém o SoapAction correto. Procure por "soapaction" ou "action" no output.
  */
@@ -10,14 +10,12 @@ const fs = require('fs')
 
 const args = process.argv.slice(2)
 if (args.length < 2) {
-  console.error('Uso: node scripts/buscar-wsdl.js <caminho.pfx> <senha> [homologacao|producao]')
+  console.error('Uso: node scripts/buscar-wsdl.js <caminho.pfx> <senha>')
   process.exit(1)
 }
 
-const [pfxPath, senha, amb = 'producao'] = args
-const baseUrl = amb === 'homologacao'
-  ? 'https://homologacao.nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx'
-  : 'https://nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx'
+const [pfxPath, senha] = args
+const baseUrl = 'https://nfce.fazenda.sp.gov.br/ws/NFCeListagemChaves.asmx'
 
 const pfx = fs.readFileSync(pfxPath)
 const agent = new https.Agent({

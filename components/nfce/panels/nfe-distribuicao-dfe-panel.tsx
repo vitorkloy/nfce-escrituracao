@@ -1,21 +1,34 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CertificateUiState, ToastVariant } from '@/types/nfce-app'
 import { useIsElectron } from '@/hooks/useIsElectron'
 import { BUTTON_PRIMARY_CLASS, INPUT_BASE_CLASS, SURFACE_CARD_CLASS } from '@/components/nfce/ui/classes'
 import { Spinner } from '@/components/nfce/ui/spinner'
-import { formatarUltNsu, montarDistDfeIntListagemNsu } from '@/lib/nfe-dist-dfe-xml'
+import { formatarUltNsu } from '@/lib/nfe-dist-dfe-xml'
 
 type NfeDistribuicaoDfePanelProps = {
   certificateState: CertificateUiState
   showToast: (variant: ToastVariant, message: string) => void
 }
 
-const ENDPOINT_INFO =
-  'https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx — produção (AN).'
+type ModoPainel = 'xml-livre' | 'sincronizacao' | 'arquivos-salvos'
 
-type ModoPainel = 'listagem-nsu' | 'xml-livre' | 'sincronizacao' | 'arquivos-salvos'
+type NfeBlockTimer = {
+  certId: string
+  cnpj14?: string
+  blockedAtMs: number
+  retryAtMs: number
+  cStat: '656'
+}
+
+function formatarTempoRestante(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000))
+  const h = String(Math.floor(totalSec / 3600)).padStart(2, '0')
+  const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0')
+  const s = String(totalSec % 60).padStart(2, '0')
+  return `${h}:${m}:${s}`
+}
 
 function formatarProgressoSync(p: {
   tipo: string
@@ -48,7 +61,6 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
   const [xml, setXml] = useState('')
   const [cnpj, setCnpj] = useState('')
   const [cUFAutor, setCUFAutor] = useState('35')
-  const [ultNSU, setUltNSU] = useState('0')
   const [resposta, setResposta] = useState<string | null>(null)
   const [resumoDist, setResumoDist] = useState<{
     cStat: string
@@ -69,6 +81,14 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
   const [listaArquivos, setListaArquivos] = useState<Array<{ chave: string; caminho: string; ano: string; mes: string }>>([])
   const [previewXml, setPreviewXml] = useState<string | null>(null)
   const [previewTitulo, setPreviewTitulo] = useState('')
+  const [nfeBlockTimer, setNfeBlockTimer] = useState<NfeBlockTimer | null>(null)
+  const [agoraMs, setAgoraMs] = useState(() => Date.now())
+
+  const certId = useMemo(() => {
+    if (certificateState.thumbprint) return `thumb:${certificateState.thumbprint}`
+    if (certificateState.pfxPath) return `pfx:${certificateState.pfxPath.toLowerCase()}`
+    return ''
+  }, [certificateState.thumbprint, certificateState.pfxPath])
 
   useEffect(() => {
     if (certificateState.certificadoCnpj?.length === 14) {
@@ -84,9 +104,62 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
     return off
   }, [isElectron])
 
+  useEffect(() => {
+    if (!isElectron || !certId) {
+      setNfeBlockTimer(null)
+      return
+    }
+    let cancelled = false
+    window.electron.app.getNfeBlockTimer(certId).then((timer) => {
+      if (cancelled) return
+      setNfeBlockTimer(timer)
+    }).catch(() => {
+      if (cancelled) return
+      // Compatibilidade em dev quando o processo main ainda não reiniciou com novos IPCs.
+      setNfeBlockTimer(null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isElectron, certId])
+
+  useEffect(() => {
+    const t = setInterval(() => setAgoraMs(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
   const certOk =
     (certificateState.thumbprint || certificateState.pfxPath) &&
     (certificateState.origemStore || certificateState.senha)
+
+  const bloqueioAtivo = Boolean(nfeBlockTimer && nfeBlockTimer.retryAtMs > agoraMs)
+
+  async function registrarBloqueio656() {
+    if (!isElectron || !certId) return
+    const payload: NfeBlockTimer = {
+      certId,
+      cnpj14: certificateState.certificadoCnpj,
+      blockedAtMs: Date.now(),
+      retryAtMs: Date.now() + 60 * 60 * 1000,
+      cStat: '656',
+    }
+    try {
+      await window.electron.app.setNfeBlockTimer(payload)
+    } catch {
+      return
+    }
+    setNfeBlockTimer(payload)
+  }
+
+  async function limparBloqueioSeHouver() {
+    if (!isElectron || !certId) return
+    try {
+      await window.electron.app.clearNfeBlockTimer(certId)
+    } catch {
+      return
+    }
+    setNfeBlockTimer(null)
+  }
 
   async function enviarPayload(xmlPayload: string) {
     if (!isElectron) return
@@ -113,6 +186,12 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
       setResposta(resp.xmlResposta ?? '')
       const d = resp.resumoDistribuicao
       setResumoDist(d ?? null)
+      if (d?.cStat === '656') {
+        await registrarBloqueio656()
+        showToast('erro', `SEFAZ: [656] ${d.xMotivo || 'Consumo indevido'} · aguarde cerca de 1h para nova tentativa.`)
+        return
+      }
+      await limparBloqueioSeHouver()
       showToast(
         'ok',
         d
@@ -123,19 +202,6 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
       showToast('erro', err instanceof Error ? err.message : 'Erro ao chamar Distribuição DFe.')
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  function enviarListagem() {
-    try {
-      const montado = montarDistDfeIntListagemNsu({
-        cnpj14: cnpj,
-        cUFAutor,
-        ultNSU,
-      })
-      void enviarPayload(montado)
-    } catch (e) {
-      showToast('erro', e instanceof Error ? e.message : 'Dados inválidos.')
     }
   }
 
@@ -156,7 +222,7 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
   }, [isElectron, pastaRaiz, cnpj])
 
   useEffect(() => {
-    if (modo === 'sincronizacao' || modo === 'arquivos-salvos' || modo === 'listagem-nsu') {
+    if (modo === 'sincronizacao' || modo === 'arquivos-salvos') {
       void atualizarEstadoNsu()
     }
   }, [modo, atualizarEstadoNsu])
@@ -191,12 +257,14 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
         reiniciarNsu,
       })
       if (r.ok) {
+        await limparBloqueioSeHouver()
         showToast(
           'ok',
           `Sincronização concluída: ${r.totalSalvos} XML(s) novos, ${r.totalIgnorados} já existentes (${r.lotes} lote(s)).`,
         )
       } else {
         const base = r.xMotivo ?? 'Falha na sincronização.'
+        if (base.includes('656')) await registrarBloqueio656()
         showToast(
           'erro',
           base.includes('656')
@@ -241,15 +309,6 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
     setPreviewXml(r.conteudo)
   }
 
-  const ultNsuFormatado = formatarUltNsu(ultNSU)
-  const ultPersistidoFmt = ultNsuPersistido ? formatarUltNsu(ultNsuPersistido) : null
-  const divergeDoPersistido = Boolean(
-    ultPersistidoFmt &&
-      pastaRaiz.trim() &&
-      cnpj.replace(/\D/g, '').length === 14 &&
-      ultNsuFormatado !== ultPersistidoFmt
-  )
-
   const btnModo = (id: ModoPainel, label: string) => (
     <button
       key={id}
@@ -270,21 +329,38 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
     <div className="fade-in h-full overflow-auto p-6 flex flex-col gap-4">
       <div>
         <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-1">NFeDistribuicaoDFe</h2>
-        <p className="text-xs text-[var(--text-muted)]">{ENDPOINT_INFO}</p>
-        <p className="text-xs text-amber-700 dark:text-amber-300/90 mt-2 max-w-3xl">
-          Este serviço é do <strong>Ambiente Nacional</strong> e, neste app, usa <strong>só produção</strong>{' '}
-          (<code className="text-[11px]">tpAmb=1</code>
-          ). O interruptor Homologação/Produção do certificado vale para os serviços <strong>NFC-e SP</strong>, não
-          altera esta chamada.
-        </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
         {btnModo('sincronizacao', 'Sincronização automática')}
         {btnModo('arquivos-salvos', 'Arquivos salvos')}
-        {btnModo('listagem-nsu', 'Consulta única (NSU)')}
         {btnModo('xml-livre', 'XML livre')}
       </div>
+
+      {certId && (
+        <div className={`p-3 ${SURFACE_CARD_CLASS} ${bloqueioAtivo ? 'border border-amber-500/40' : ''}`}>
+          {bloqueioAtivo ? (
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <span className="text-amber-700 dark:text-amber-300/90">
+                cStat 656 registrado para este certificado. Tempo restante estimado:
+                {' '}
+                <strong>{formatarTempoRestante((nfeBlockTimer?.retryAtMs ?? 0) - agoraMs)}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => void limparBloqueioSeHouver()}
+                className="text-xs text-[var(--teal)] underline no-drag"
+              >
+                Limpar timer
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-[var(--text-muted)]">
+              Timer de bloqueio (656): sem bloqueio ativo para o certificado atual.
+            </p>
+          )}
+        </div>
+      )}
 
       {modo === 'sincronizacao' && (
         <div className={`p-4 ${SURFACE_CARD_CLASS} space-y-3`}>
@@ -469,99 +545,6 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
         </div>
       )}
 
-      {modo === 'listagem-nsu' && (
-        <div className={`p-4 ${SURFACE_CARD_CLASS} space-y-3`}>
-          <p className="text-xs text-[var(--text-secondary)]">
-            Uma única requisição <strong>nfeDistDFeInteresse</strong> (até 50 XMLs). Resposta bruta abaixo.
-          </p>
-          <p className="text-xs text-[var(--text-muted)]">
-            Para encadear corretamente com a sincronização, o <strong>ultNSU</strong> deve ser o último valor já usado
-            (ou o salvo em disco). Informar NSU desatualizado contribui para <strong>656</strong>.
-          </p>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => void escolherPasta()} className={`px-3 py-2 text-sm no-drag ${BUTTON_PRIMARY_CLASS}`}>
-              Pasta raiz do estado
-            </button>
-            <span className="text-xs text-[var(--text-muted)] truncate max-w-[min(100%,280px)]" title={pastaRaiz || undefined}>
-              {pastaRaiz || 'Opcional — necessária para ler o NSU salvo'}
-            </span>
-            <button type="button" onClick={() => void atualizarEstadoNsu()} className="text-xs text-[var(--teal)] underline no-drag">
-              Atualizar leitura
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-[var(--text-muted)]">
-              NSU no disco: <strong className="text-[var(--text-secondary)]">{ultNsuPersistido ?? '—'}</strong>
-            </span>
-            <button
-              type="button"
-              disabled={!ultNsuPersistido}
-              onClick={() => ultNsuPersistido && setUltNSU(ultNsuPersistido.replace(/\D/g, '').slice(0, 15))}
-              className="text-[var(--teal)] underline no-drag disabled:opacity-40 disabled:no-underline"
-            >
-              Usar este NSU no campo
-            </button>
-          </div>
-
-          {divergeDoPersistido && (
-            <p className="text-[11px] text-amber-700 dark:text-amber-300/90 rounded border border-amber-500/35 px-2 py-1.5 bg-amber-500/10">
-              O ultNSU digitado difere do salvo na pasta para este CNPJ. Confirme antes de enviar.
-            </p>
-          )}
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">CNPJ</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={cnpj}
-                onChange={(e) => setCnpj(e.target.value.replace(/\D/g, '').slice(0, 14))}
-                className={INPUT_BASE_CLASS}
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">cUFAutor</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={cUFAutor}
-                onChange={(e) => setCUFAutor(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                className={INPUT_BASE_CLASS}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
-                ultNSU (normalizado: {ultNsuFormatado})
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={ultNSU}
-                onChange={(e) => setUltNSU(e.target.value.replace(/\D/g, '').slice(0, 15))}
-                className={INPUT_BASE_CLASS}
-              />
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void enviarListagem()}
-            disabled={isLoading}
-            className={`flex items-center gap-2 px-4 py-2 no-drag ${BUTTON_PRIMARY_CLASS}`}
-          >
-            {isLoading ? (
-              <>
-                <Spinner /> Enviando…
-              </>
-            ) : (
-              'Enviar uma consulta'
-            )}
-          </button>
-        </div>
-      )}
-
       {modo === 'xml-livre' && (
         <>
           <p className="text-xs text-[var(--text-secondary)]">
@@ -590,7 +573,7 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
         </>
       )}
 
-      {resumoDist !== null && (modo === 'listagem-nsu' || modo === 'xml-livre') && (
+      {resumoDist !== null && modo === 'xml-livre' && (
         <div className={`p-3 ${SURFACE_CARD_CLASS} border-l-2 border-[var(--teal-dim)]`}>
           <p className="text-[10px] uppercase text-[var(--text-muted)] mb-1">retDistDFeInt (resumo)</p>
           <p className="text-sm text-[var(--text-primary)]">
@@ -604,7 +587,7 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
         </div>
       )}
 
-      {resposta !== null && (modo === 'listagem-nsu' || modo === 'xml-livre') && (
+      {resposta !== null && modo === 'xml-livre' && (
         <div className={`p-4 ${SURFACE_CARD_CLASS} flex-1 min-h-0 flex flex-col`}>
           <p className="text-xs text-[var(--text-muted)] mb-2">Resposta (XML bruto SOAP)</p>
           <pre className="text-xs font-mono whitespace-pre-wrap break-all overflow-auto max-h-[420px] text-[var(--text-primary)]">

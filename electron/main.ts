@@ -14,6 +14,7 @@ import {
   SefazError,
   SefazNetworkError,
   SefazParseError,
+  SefazCancelError,
   type ConfigCert,
   type ResultadoListagem,
   type ResultadoDownload,
@@ -42,13 +43,22 @@ interface CertStorePayload {
   pfxPath: string
   thumbprint?: string
   origemStore: boolean
-  ambiente: 'homologacao' | 'producao'
+  ambiente: 'producao'
+}
+
+interface NfeBlockState {
+  certId: string
+  cnpj14?: string
+  blockedAtMs: number
+  retryAtMs: number
+  cStat: '656'
 }
 
 interface StoreSchema {
   cert?: CertStorePayload
   ui?: {
     theme?: ThemePreference
+    nfeBlockTimers?: Record<string, NfeBlockState>
   }
 }
 
@@ -98,6 +108,8 @@ function updateMainWindowBackground() {
 let mainWindow: BrowserWindow | null = null
 let appEstaOcupada = false
 let ignorarConfirmacaoFechamento = false
+let cancelarListagemSefaz = false
+let abortListagemSefaz: AbortController | null = null
 
 type RelatorioModo = 'agora' | 'depois' | 'nenhum'
 
@@ -292,6 +304,53 @@ ipcMain.handle('app:get-version', () => app.getVersion())
 ipcMain.handle('app:set-modulo', (_e, modulo: AppModule) => modulo === 'nfce' || modulo === 'nfe')
 ipcMain.on('app:set-busy', (_e, busy: boolean) => {
   appEstaOcupada = Boolean(busy)
+})
+
+ipcMain.handle('app:set-nfe-block-timer', (_e, payload: {
+  certId: string
+  cnpj14?: string
+  blockedAtMs: number
+  retryAtMs: number
+  cStat: '656'
+}) => {
+  const certId = String(payload?.certId ?? '').trim()
+  if (!certId) return false
+  const existingUi = (store.get('ui') as StoreSchema['ui'] | undefined) ?? {}
+  const timers = { ...(existingUi.nfeBlockTimers ?? {}) }
+  timers[certId] = {
+    certId,
+    cnpj14: payload?.cnpj14,
+    blockedAtMs: Number(payload?.blockedAtMs ?? Date.now()),
+    retryAtMs: Number(payload?.retryAtMs ?? Date.now()),
+    cStat: '656',
+  }
+  store.set('ui', { ...existingUi, nfeBlockTimers: timers })
+  return true
+})
+
+ipcMain.handle('app:get-nfe-block-timer', (_e, certId: string) => {
+  const id = String(certId ?? '').trim()
+  if (!id) return null
+  const ui = store.get('ui') as StoreSchema['ui'] | undefined
+  const timer = ui?.nfeBlockTimers?.[id]
+  return timer ?? null
+})
+
+ipcMain.handle('app:clear-nfe-block-timer', (_e, certId: string) => {
+  const id = String(certId ?? '').trim()
+  if (!id) return false
+  const existingUi = (store.get('ui') as StoreSchema['ui'] | undefined) ?? {}
+  const timers = { ...(existingUi.nfeBlockTimers ?? {}) }
+  if (!(id in timers)) return true
+  delete timers[id]
+  store.set('ui', { ...existingUi, nfeBlockTimers: timers })
+  return true
+})
+
+ipcMain.handle('sefaz:cancelar-listagem', () => {
+  cancelarListagemSefaz = true
+  try { abortListagemSefaz?.abort() } catch { /* noop */ }
+  return true
 })
 
 ipcMain.handle('ui:get-theme', () => readTheme())
@@ -782,7 +841,7 @@ ipcMain.handle('cert:selecionar-arquivo', async () => {
 
 ipcMain.handle('cert:salvar-config', async (_e, config: CertStorePayload) => {
   try {
-    store.set('cert', config)
+    store.set('cert', { ...config, ambiente: 'producao' })
     return true
   } catch (err) {
     console.error('[Main] Falha ao salvar configuração:', err)
@@ -830,6 +889,8 @@ ipcMain.handle(
     let tmpCriado = false
 
     try {
+      cancelarListagemSefaz = false
+      abortListagemSefaz = new AbortController()
       // Resolve o certificado — lança erro explícito se não configurado
       const resolved = await resolverPfx(config)
       pfxPath = resolved.pfxPath
@@ -843,15 +904,22 @@ ipcMain.handle(
       if (paginacaoAuto) {
         const chaves = await listarTodasChaves(cfg, dataInicial, dataFinal, (parcial) => {
           mainWindow?.webContents.send('sefaz:progresso-listagem', parcial)
-        })
+        }, () => cancelarListagemSefaz, abortListagemSefaz.signal)
         return { ok: true, chaves, total: chaves.length, cnpj }
       } else {
-        const resultado: ResultadoListagem = await listarChaves(cfg, dataInicial, dataFinal)
+        if (cancelarListagemSefaz) throw new SefazCancelError()
+        const resultado: ResultadoListagem = await listarChaves(cfg, dataInicial, dataFinal, {
+          signal: abortListagemSefaz.signal,
+          shouldCancel: () => cancelarListagemSefaz,
+        })
         return { ok: true, ...resultado, cnpj }
       }
     } catch (err: unknown) {
+      if (err instanceof SefazCancelError) return { ok: false, xMotivo: 'Consulta cancelada pelo usuário.' }
       return respostaErro(err)
     } finally {
+      cancelarListagemSefaz = false
+      abortListagemSefaz = null
       if (tmpCriado && pfxPath) limparPfxTemp(pfxPath)
     }
   }

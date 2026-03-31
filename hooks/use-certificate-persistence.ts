@@ -9,7 +9,7 @@ const initialCertificateState: CertificateUiState = {
   thumbprint: undefined,
   origemStore: true,
   senha: '',
-  ambiente: 'homologacao',
+  ambiente: 'producao',
 }
 
 /**
@@ -51,7 +51,7 @@ export function useCertificatePersistence(isElectron: boolean) {
           pfxPath: saved.pfxPath ?? '',
           thumbprint: saved.thumbprint,
           origemStore: saved.origemStore ?? false,
-          ambiente: saved.ambiente ?? 'homologacao',
+          ambiente: 'producao',
           certificadoNome,
           certificadoCnpj,
         }))

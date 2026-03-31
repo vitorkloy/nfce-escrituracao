@@ -90,7 +90,7 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
         pfxPath: certificateState.pfxPath,
         thumbprint: certificateState.thumbprint,
         origemStore: certificateState.origemStore,
-        ambiente: certificateState.ambiente,
+        ambiente: 'producao',
       })
       showToast(saved ? 'ok' : 'erro', saved ? 'Configuração salva.' : 'Falha ao salvar configuração.')
     } catch (err) {
@@ -343,31 +343,6 @@ export function ConfigPanel({ certificateState, onCertificateChange, showToast }
           </div>
         </div>
       )}
-
-      <div className="mb-8">
-        <label
-          className="block text-xs font-medium mb-2 uppercase tracking-widest text-[var(--text-muted)]"
-        >
-          Ambiente
-        </label>
-        <div className="flex gap-3">
-          {(['homologacao', 'producao'] as const).map((ambiente) => (
-            <button
-              key={ambiente}
-              type="button"
-              onClick={() => onCertificateChange({ ...certificateState, ambiente })}
-              className={[
-                'flex-1 py-2.5 rounded text-sm font-medium transition-all no-drag border',
-                certificateState.ambiente === ambiente
-                  ? 'bg-[var(--teal-glow)] border-[var(--teal-dim)] text-[var(--teal)]'
-                  : 'bg-[var(--bg-raised)] border-[var(--border)] text-[var(--text-secondary)]',
-              ].join(' ')}
-            >
-              {ambiente === 'homologacao' ? '🔬 Homologação' : '🏭 Produção'}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div className="flex gap-3">
         <button
