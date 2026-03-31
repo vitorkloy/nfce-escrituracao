@@ -14,6 +14,8 @@ type NfeDistribuicaoDfePanelProps = {
 
 type ModoPainel = 'xml-livre' | 'sincronizacao' | 'arquivos-salvos'
 
+type FiltroPapelDistDfe = 'todos' | 'emitente' | 'destinatario'
+
 type NfeBlockTimer = {
   certId: string
   cnpj14?: string
@@ -37,16 +39,22 @@ function formatarProgressoSync(p: {
   maxNSU?: string
   loteSalvos?: number
   loteIgnorados?: number
+  loteFiltrados?: number
   totalSalvos?: number
   totalIgnorados?: number
+  totalFiltrados?: number
   mensagem?: string
 }): string {
   const ts = new Date().toLocaleTimeString('pt-BR')
   if (p.tipo === 'lote') {
-    return `[${ts}] Lote cStat=${p.cStat ?? '—'} +${p.loteSalvos ?? 0} novos, ${p.loteIgnorados ?? 0} já existentes | ultNSU=${p.ultNSU ?? '—'} | acumulado: ${p.totalSalvos ?? 0} salvos`
+    const filtroLote = (p.loteFiltrados ?? 0) > 0 ? `, ${p.loteFiltrados} filtrados (não gravados)` : ''
+    const filtroTot =
+      (p.totalFiltrados ?? 0) > 0 ? `, ${p.totalFiltrados} filtrados no acumulado` : ''
+    return `[${ts}] Lote cStat=${p.cStat ?? '—'} +${p.loteSalvos ?? 0} novos, ${p.loteIgnorados ?? 0} já existentes${filtroLote} | ultNSU=${p.ultNSU ?? '—'} | acumulado: ${p.totalSalvos ?? 0} salvos${filtroTot}`
   }
   if (p.tipo === 'concluido') {
-    return `[${ts}] Concluído — total ${p.totalSalvos ?? 0} novos, ${p.totalIgnorados ?? 0} ignorados. ${p.mensagem ?? ''}`
+    const filtroFim = (p.totalFiltrados ?? 0) > 0 ? `, ${p.totalFiltrados} filtrados (não gravados)` : ''
+    return `[${ts}] Concluído — total ${p.totalSalvos ?? 0} novos, ${p.totalIgnorados ?? 0} ignorados${filtroFim}. ${p.mensagem ?? ''}`
   }
   const msgErro = `[${ts}] Erro: ${p.mensagem ?? '—'}`
   if (p.cStat === '656') {
@@ -71,6 +79,7 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
   const [isLoading, setIsLoading] = useState(false)
 
   const [pastaRaiz, setPastaRaiz] = useState('')
+  const [filtroPapel, setFiltroPapel] = useState<FiltroPapelDistDfe>('todos')
   const [reiniciarNsu, setReiniciarNsu] = useState(false)
   const [ultNsuPersistido, setUltNsuPersistido] = useState<string | null>(null)
   const [logSync, setLogSync] = useState<string[]>([])
@@ -264,12 +273,15 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
         cnpj14: cnpj.replace(/\D/g, ''),
         cUFAutor: cUFAutor.replace(/\D/g, ''),
         reiniciarNsu,
+        filtroPapel,
       })
       if (r.ok) {
         await limparBloqueioSeHouver()
+        const partFiltrados =
+          r.totalFiltrados > 0 ? `, ${r.totalFiltrados} não gravados (filtro)` : ''
         showToast(
           'ok',
-          `Sincronização concluída: ${r.totalSalvos} XML(s) novos, ${r.totalIgnorados} já existentes (${r.lotes} lote(s)).`,
+          `Sincronização concluída: ${r.totalSalvos} XML(s) novos, ${r.totalIgnorados} já existentes${partFiltrados} (${r.lotes} lote(s)).`,
         )
       } else {
         const base = r.xMotivo ?? 'Falha na sincronização.'
@@ -368,7 +380,10 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
         <div className={`p-4 ${SURFACE_CARD_CLASS} space-y-3`}>
           <p className="text-xs text-[var(--text-secondary)]">
             Loop por <strong>NSU</strong> (até 50 documentos por lote): grava em{' '}
-            <code className="text-[11px]">pasta/CNPJ/ANO/MÊS/chave.xml</code>. O último NSU fica em{' '}
+            <code className="text-[11px]">pasta/CNPJ/ANO/MÊS/chave_procNFe.xml</code> (ou{' '}
+            <code className="text-[11px]">chave_resNFe.xml</code>, <code className="text-[11px]">chave_evento.xml</code>
+            ). Opcionalmente restrinja <strong>o que é gravado</strong> (só notas em que você é emitente ou só em que é
+            destinatário); itens fora do filtro não são salvos, mas o NSU da fila continua avançando. O último NSU fica em{' '}
             <code className="text-[11px]">.nfe-dist-state.json</code> dentro da pasta do CNPJ — na próxima execução só
             busca notas novas. Arquivos já existentes não são sobrescritos. A fila da AN pode trazer{' '}
             <strong>resNFe</strong> (resumo), <strong>procNFe</strong> (NF-e autorizada completa, quando disponível) e{' '}
@@ -419,6 +434,27 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
                 className={INPUT_BASE_CLASS}
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider text-[var(--text-muted)] mb-1">
+              O que gravar na pasta
+            </label>
+            <select
+              value={filtroPapel}
+              onChange={(e) => setFiltroPapel(e.target.value as FiltroPapelDistDfe)}
+              disabled={syncRodando}
+              className={`${INPUT_BASE_CLASS} max-w-xl`}
+            >
+              <option value="todos">Todos os documentos retornados na fila</option>
+              <option value="emitente">Apenas saída (CNPJ consultado como emitente da NF-e)</option>
+              <option value="destinatario">Apenas entrada (CNPJ consultado como destinatário)</option>
+            </select>
+            <p className="text-[10px] text-[var(--text-muted)] mt-1 max-w-2xl">
+              Eventos (ex.: manifestação) só entram se o CNPJ consultado for o autor do evento no XML. Resumos{' '}
+              <code className="text-[10px]">resNFe</code> sem tag <code className="text-[10px]">dest</code> não servem
+              para o filtro “entrada”.
+            </p>
           </div>
 
           <label className="flex items-start gap-2 text-xs text-[var(--text-secondary)] cursor-pointer no-drag">

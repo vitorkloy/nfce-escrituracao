@@ -73,7 +73,13 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('nfe:dist-dfe-estado', pastaRaiz, cnpj14),
     syncDistDfe: (
       config: ConfigCert & { thumbprint?: string },
-      opts: { pastaRaiz: string; cnpj14: string; cUFAutor: string; reiniciarNsu: boolean }
+      opts: {
+        pastaRaiz: string
+        cnpj14: string
+        cUFAutor: string
+        reiniciarNsu: boolean
+        filtroPapel?: 'todos' | 'emitente' | 'destinatario'
+      }
     ) => ipcRenderer.invoke('nfe:sync-dist-dfe', config, opts),
     listarXmlsSalvos: (
       pastaRaiz: string,
@@ -87,8 +93,10 @@ contextBridge.exposeInMainWorld('electron', {
       cStat?: string
       loteSalvos?: number
       loteIgnorados?: number
+      loteFiltrados?: number
       totalSalvos?: number
       totalIgnorados?: number
+      totalFiltrados?: number
       mensagem?: string
     }) => void) => {
       const fn = (_e: Electron.IpcRendererEvent, p: Parameters<typeof cb>[0]) => cb(p)

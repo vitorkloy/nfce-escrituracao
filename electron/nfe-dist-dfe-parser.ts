@@ -173,6 +173,97 @@ export function extrairAnoMesEmissao(xml: string): { ano: string; mes: string } 
   return null
 }
 
+/** Sufixo de arquivo para evitar colisão: mesma chave pode ter procNFe, resNFe e eventos. */
+export type DistDfeArquivoTipo = 'procNFe' | 'resNFe' | 'evento' | 'outro'
+
+/** Filtro na sincronização: notas em que o CNPJ consultado é emitente (saída) ou destinatário (entrada). */
+export type DistDfeFiltroPapel = 'todos' | 'emitente' | 'destinatario'
+
+/** CNPJ do emitente embutido na chave de acesso (modelo 55 — posições 6–19, 14 dígitos). */
+export function extrairCnpjEmitenteDaChave44(chave: string): string | undefined {
+  const d = chave.replace(/\D/g, '')
+  if (d.length !== 44) return undefined
+  return d.slice(6, 20)
+}
+
+/** Emitente em procNFe/NFe, resNFe resumo ou, em último caso, pela chave. */
+export function extrairCnpjEmitenteDistDfe(xml: string): string | undefined {
+  const emitBloco = xml.match(/<emit>([\s\S]*?)<\/emit>/i)
+  if (emitBloco) {
+    const c = emitBloco[1].match(/<CNPJ>(\d{14})<\/CNPJ>/i)
+    if (c?.[1]) return c[1]
+  }
+  if (/<resNFe\b/i.test(xml)) {
+    const inner = xml.match(/<resNFe[^>]*>([\s\S]*?)<\/resNFe>/i)
+    if (inner) {
+      const c = inner[1].match(/<CNPJ>(\d{14})<\/CNPJ>/i)
+      if (c?.[1]) return c[1]
+    }
+  }
+  const chave = extrairChaveAcesso44(xml)
+  if (chave) return extrairCnpjEmitenteDaChave44(chave)
+  return undefined
+}
+
+/** Destinatário em NFe (tag dest). resNFe costuma não trazer dest — aí não há match para filtro “entrada”. */
+export function extrairCnpjDestinatarioDistDfe(xml: string): string | undefined {
+  const destBloco = xml.match(/<dest>([\s\S]*?)<\/dest>/i)
+  if (!destBloco) return undefined
+  const c = destBloco[1].match(/<CNPJ>(\d{14})<\/CNPJ>/i)
+  return c?.[1]
+}
+
+/** CNPJ do autor do evento (infEvento) — ex.: manifestação pelo dest ou cancelamento pelo emit. */
+export function extrairCnpjAutorEventoNFe(xml: string): string | undefined {
+  const inner = xml.match(/<infEvento[^>]*>([\s\S]*?)<\/infEvento>/i)
+  if (!inner) return undefined
+  const c = inner[1].match(/<CNPJ>(\d{14})<\/CNPJ>/i)
+  return c?.[1]
+}
+
+/**
+ * Se false, o documento não é gravado em disco; o NSU da fila AN continua sendo consumido normalmente.
+ */
+export function devePersistirDocumentoDistDfe(
+  xml: string,
+  schema: string,
+  cnpj14: string,
+  filtro: DistDfeFiltroPapel
+): boolean {
+  if (filtro === 'todos') return true
+  const cnpj = cnpj14.replace(/\D/g, '')
+  if (cnpj.length !== 14) return true
+
+  const tipo = inferirTipoArquivoDistDfe(schema, xml)
+  if (tipo === 'evento') {
+    const autor = extrairCnpjAutorEventoNFe(xml)
+    return Boolean(autor && autor === cnpj)
+  }
+
+  if (filtro === 'emitente') {
+    const em = extrairCnpjEmitenteDistDfe(xml)
+    return Boolean(em && em === cnpj)
+  }
+
+  const de = extrairCnpjDestinatarioDistDfe(xml)
+  return Boolean(de && de === cnpj)
+}
+
+export function inferirTipoArquivoDistDfe(schema: string, xml: string): DistDfeArquivoTipo {
+  const s = (schema ?? '').toLowerCase()
+  if (s.includes('procnfe')) return 'procNFe'
+  if (s.includes('resnfe')) return 'resNFe'
+  if (s.includes('resevento') || s.includes('proceventonfe') || s.includes('procevento')) return 'evento'
+  if (s.includes('evento')) return 'evento'
+
+  const head = (xml ?? '').trimStart().slice(0, 500)
+  if (/<(?:[\w.-]+:)?nfeProc\b/i.test(head)) return 'procNFe'
+  if (/<(?:[\w.-]+:)?procEventoNFe\b/i.test(head)) return 'evento'
+  if (/<(?:[\w.-]+:)?resNFe\b/i.test(head)) return 'resNFe'
+  if (/<(?:[\w.-]+:)?resEvento\b/i.test(head)) return 'evento'
+  return 'outro'
+}
+
 /** Contagem por tipo de schema AN (para log/diag). */
 export function resumirTiposDocZipPorSchema(documentos: DocZipItem[]): string {
   let procNFe = 0

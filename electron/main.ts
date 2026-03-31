@@ -25,6 +25,7 @@ import {
   extrairXmlNfeRecepcaoEventoResult,
   parsearRetEnvEvento,
 } from './nfe-recepcao-evento-parser'
+import type { DistDfeFiltroPapel } from './nfe-dist-dfe-parser'
 import { sincronizarDistDfeNfe, carregarUltNsu } from './nfe-dist-dfe-sync'
 import type { NfeDistDfeSyncProgresso } from './nfe-dist-dfe-sync'
 import { listarXmlsNfeSalvos, type NfeXmlSalvoInfo } from './nfe-list-xmls-local'
@@ -1259,7 +1260,13 @@ ipcMain.handle(
   async (
     _e,
     config: ConfigCert & { thumbprint?: string },
-    opts: { pastaRaiz: string; cnpj14: string; cUFAutor: string; reiniciarNsu: boolean }
+    opts: {
+      pastaRaiz: string
+      cnpj14: string
+      cUFAutor: string
+      reiniciarNsu: boolean
+      filtroPapel?: DistDfeFiltroPapel
+    }
   ) => {
     let pfxPath = ''
     let tmpCriado = false
@@ -1267,10 +1274,44 @@ ipcMain.handle(
       const pastaRaiz = String(opts?.pastaRaiz ?? '').trim()
       const cnpj14 = String(opts?.cnpj14 ?? '').replace(/\D/g, '')
       const cUFAutor = String(opts?.cUFAutor ?? '').replace(/\D/g, '')
-      if (!pastaRaiz) return { ok: false, totalSalvos: 0, totalIgnorados: 0, ultNSU: '', lotes: 0, xMotivo: 'Selecione a pasta raiz de armazenamento.' }
-      if (cnpj14.length !== 14) return { ok: false, totalSalvos: 0, totalIgnorados: 0, ultNSU: '', lotes: 0, xMotivo: 'CNPJ com 14 dígitos é obrigatório.' }
+      const filtroPapel: DistDfeFiltroPapel =
+        opts?.filtroPapel === 'emitente' ||
+        opts?.filtroPapel === 'destinatario' ||
+        opts?.filtroPapel === 'todos'
+          ? opts.filtroPapel
+          : 'todos'
+      if (!pastaRaiz) {
+        return {
+          ok: false,
+          totalSalvos: 0,
+          totalIgnorados: 0,
+          totalFiltrados: 0,
+          ultNSU: '',
+          lotes: 0,
+          xMotivo: 'Selecione a pasta raiz de armazenamento.',
+        }
+      }
+      if (cnpj14.length !== 14) {
+        return {
+          ok: false,
+          totalSalvos: 0,
+          totalIgnorados: 0,
+          totalFiltrados: 0,
+          ultNSU: '',
+          lotes: 0,
+          xMotivo: 'CNPJ com 14 dígitos é obrigatório.',
+        }
+      }
       if (!/^\d{2}$/.test(cUFAutor)) {
-        return { ok: false, totalSalvos: 0, totalIgnorados: 0, ultNSU: '', lotes: 0, xMotivo: 'cUFAutor inválido.' }
+        return {
+          ok: false,
+          totalSalvos: 0,
+          totalIgnorados: 0,
+          totalFiltrados: 0,
+          ultNSU: '',
+          lotes: 0,
+          xMotivo: 'cUFAutor inválido.',
+        }
       }
 
       const resolved = await resolverPfx(config)
@@ -1286,6 +1327,7 @@ ipcMain.handle(
         cnpj14,
         cUFAutor,
         reiniciarNsu: Boolean(opts?.reiniciarNsu),
+        filtroPapel,
         onProgress: enviarProgressoSyncDistDfe,
       })
     } catch (err: unknown) {
@@ -1293,6 +1335,7 @@ ipcMain.handle(
         ok: false,
         totalSalvos: 0,
         totalIgnorados: 0,
+        totalFiltrados: 0,
         ultNSU: '',
         lotes: 0,
         xMotivo: mensagemErro(err),

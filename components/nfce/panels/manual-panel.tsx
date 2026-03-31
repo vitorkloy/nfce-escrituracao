@@ -9,13 +9,12 @@ export function ManualPanel() {
       </p>
 
       <section className="mb-5 rounded border border-[var(--border)] bg-[var(--bg-surface)] p-4">
-        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">0) Escolher módulo</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">0) Módulo NFC-e ou NF-e</h3>
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
           <li>
-            A cada abertura do aplicativo você escolhe <strong>NFC-e</strong> ou <strong>NF-e</strong> — a opção{' '}
-            <strong>não é gravada</strong> no disco.
+            Ao abrir, o aplicativo inicia no módulo <strong>NFC-e</strong>. A troca para <strong>NF-e</strong> é feita na{' '}
+            <strong>barra lateral</strong>; a escolha vale só para a sessão atual (<strong>não é gravada</strong> no disco).
           </li>
-          <li>Durante o uso, o seletor na barra lateral permite alternar entre os dois módulos.</li>
           <li>A navegação e as funções mudam conforme o módulo ativo.</li>
         </ul>
       </section>
@@ -36,6 +35,10 @@ export function ManualPanel() {
           <li>Vá para a aba <strong>Listagem</strong>.</li>
           <li>Informe o período (data inicial e final).</li>
           <li>Clique em <strong>Buscar</strong> para carregar as chaves de acesso.</li>
+          <li>
+            Durante a busca, o overlay global mostra o progresso; use <strong>Cancelar busca</strong> no overlay para
+            interromper.
+          </li>
           <li>Use filtros de emitente e texto para localizar o que precisa.</li>
         </ul>
       </section>
@@ -66,8 +69,9 @@ export function ManualPanel() {
           <li>Selecione a pasta onde os `*_nfce.xml` estão salvos.</li>
           <li>Veja a prévia dos arquivos e o total encontrado.</li>
           <li>
-            Clique em <strong>Gerar XLSX</strong> para criar `comparativo_aprovado.xlsx` e
-            `comparativo_cancelamento.xlsx`.
+            Clique em <strong>Gerar XLSX</strong> para criar os arquivos com nome no formato{' '}
+            <strong>Razão social · CNPJ · comparativo_aprovado/cancelamento.xlsx</strong> (emitente extraído dos XMLs;
+            caracteres inválidos no nome de arquivo são ajustados).
           </li>
         </ul>
       </section>
@@ -79,16 +83,20 @@ export function ManualPanel() {
           <li>
             No módulo <strong>NF-e</strong> há <strong>NFeDistribuicaoDFe</strong> e{' '}
             <strong>NFeRecepcaoEvento4</strong> (produção AN). Em <strong>Distribuição DFe</strong>, use{' '}
-            <strong>Sincronização automática</strong> para baixar XMLs em loop (NSU), gravar em{' '}
-            <code className="text-[11px]">pasta/CNPJ/ano/mês/chave.xml</code>, pular arquivos já existentes e guardar o
-            último NSU em <code className="text-[11px]">.nfe-dist-state.json</code>. Há também consulta única por NSU, XML
-            livre e a aba <strong>Arquivos salvos</strong> para listar e abrir XMLs locais.
+            <strong>Sincronização automática</strong> para baixar XMLs em loop (NSU), gravando em{' '}
+            <code className="text-[11px]">pasta/CNPJ/ano/mês/</code> com nomes{' '}
+            <code className="text-[11px]">chave_procNFe.xml</code>, <code className="text-[11px]">chave_resNFe.xml</code>,{' '}
+            <code className="text-[11px]">chave_evento.xml</code> (etc.), para não misturar nota e evento na mesma chave;
+            pular se o mesmo tipo já existir; último NSU em <code className="text-[11px]">.nfe-dist-state.json</code>; log de
+            diagnóstico em <code className="text-[11px]">sync-debug.log</code>. Há também <strong>XML livre</strong> e a aba{' '}
+            <strong>Arquivos salvos</strong>. O CNPJ da sincronização deve ser o do certificado configurado.
           </li>
           <li>
             O XLSX inclui uma linha inicial com <strong>EMPRESA</strong> e <strong>CNPJ</strong> (extraídos do XML),
-            cabeçalho estilizado e colunas número do documento, data de emissão e valor do cupom.
+            cabeçalho estilizado e colunas número do documento, data de emissão e valor do cupom (valor numérico no
+            arquivo; vírgula decimal ao abrir depende do Excel/locale).
           </li>
-          <li>O arquivo já abre formatado no Excel, sem precisar importar como texto.</li>
+          <li>O arquivo abre direto no Excel, sem precisar importar como texto.</li>
         </ul>
       </section>
     </div>

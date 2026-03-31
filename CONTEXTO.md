@@ -9,8 +9,10 @@
 Aplicativo desktop (.exe) de escrituração fiscal com dois módulos: **NFC-e** e **NF-e**.
 Stack: Electron + Next.js 14 + TypeScript
 Escopo atual:
-- **NFC-e (SEFAZ-SP):** listagem, download individual, download em lote e relatório XLSX.
-- **NF-e (Ambiente Nacional):** Distribuição DFe, Recepção de Evento, sincronização por NSU e listagem de XMLs salvos.
+- **NFC-e (SEFAZ-SP):** listagem (com cancelamento de busca), download individual, download em lote e relatório XLSX (nomes de arquivo com razão social + CNPJ; valores monetários como número no Excel, exibição conforme locale).
+- **NF-e (Ambiente Nacional):** Distribuição DFe (XML livre), Recepção de Evento, **sincronização automática por NSU** (grava XMLs em disco), `sync-debug.log`, timer de bloqueio **656** (sem botão manual de limpar) e listagem de XMLs salvos.
+
+**Comportamento ao abrir:** não há tela inicial de escolha de módulo; a sessão inicia em **NFC-e** e a troca **NFC-e ↔ NF-e** é feita pela **sidebar**.
 
 ---
 
@@ -23,16 +25,20 @@ nfce-escrituracao/
 │   ├── preload.ts              # contextBridge — expõe window.electron ao renderer
 │   ├── sefaz.ts                # Cliente SOAP NFC-e (SEFAZ-SP)
 │   ├── nfe.ts                  # Cliente SOAP NF-e (AN): DistDFe + Recepção Evento
+│   ├── nfe-dist-dfe-build.ts   # Montagem de distDFeInt (listagem NSU)
 │   ├── nfe-dist-dfe-sync.ts    # Sincronização automática por NSU (NF-e)
-│   ├── nfe-dist-dfe-parser.ts  # Parser de retDistDFeInt
+│   ├── nfe-dist-dfe-parser.ts  # Parser retDistDFeInt, docZip, tipo de arquivo
 │   ├── nfe-recepcao-evento-parser.ts
 │   └── nfe-list-xmls-local.ts  # Leitura de XMLs salvos em disco
 ├── app/
 │   ├── layout.tsx              # Layout raiz Next.js
-│   ├── page.tsx                # Shell da UI com troca de módulo
+│   ├── page.tsx                # Shell: sidebar, overlay global (listagem/lote), toasts
 │   └── globals.css             # CSS variables, IBM Plex fonts
+├── hooks/
+│   ├── use-certificate-persistence.ts
+│   └── use-electron-app-meta.ts  # Versão do app; módulo em sessão (padrão nfce)
 ├── components/nfce/
-│   ├── shell/                  # Sidebar, seletor de módulo e navegação por módulo
+│   ├── shell/                  # Sidebar, navegação por módulo (NFC-e / NF-e)
 │   └── panels/                 # Painéis NFC-e e NF-e (Dist DFe / Recepção evento / etc.)
 ├── package.json
 ├── next.config.mjs       # output: export
@@ -186,10 +192,29 @@ new https.Agent({
 ## 9. STATUS ATUAL
 
 - Módulo **NFC-e** funcional: SOAP 1.2 (NFCeListagemChaves, NFCeDownloadXML), download em lote, relatório XLSX e paginação automática.
-- Módulo **NF-e** funcional para os fluxos implementados: DistDFe (consulta XML livre/NSU), Recepção de Evento, sincronização automática por NSU e leitura de XMLs locais.
+- Módulo **NF-e** funcional para os fluxos implementados: DistDFe (XML livre), Recepção de Evento, sincronização automática por NSU e leitura de XMLs locais.
 - Retry para ECONNRESET, EPIPE, ETIMEDOUT.
 - `parseTagValue: false` para chave de 44 dígitos (evita notação científica).
-- UX: overlay de loading com barra de progresso, confirmação ao fechar durante operação, validação de certificado e toasts com mensagem da SEFAZ.
+- UX: overlay global com barra de progresso onde aplicável, **cancelamento de listagem NFC-e** no próprio overlay, confirmação ao fechar durante operação, validação de certificado e toasts com mensagem da SEFAZ.
+
+### 9.1 NF-e — sincronização DistDFe e arquivos em disco
+
+- **Pasta raiz** escolhida na UI; subpastas por CNPJ consultado: `{pastaRaiz}/{CNPJ14}/`.
+- **Estado do NSU:** `{pastaRaiz}/{CNPJ14}/.nfe-dist-state.json` (`ultNSU`, `atualizadoEm`).
+- **Log de diagnóstico:** `{pastaRaiz}/{CNPJ14}/sync-debug.log` — eventos por lote, inclusive `tiposSchema` (contagem `procNFe` / `resNFe` / `evento` / `outro`).
+- **XMLs gravados:** `{pastaRaiz}/{CNPJ14}/{ano}/{mes}/` com nomes:
+  - Com chave de 44 dígitos detectada no conteúdo: **`{chave}_procNFe.xml`**, **`{chave}_resNFe.xml`**, **`{chave}_evento.xml`** ou **`{chave}_outro.xml`** (tipo inferido pelo `schema` do `docZip` e pelo XML).
+  - Sem chave: **`NSU_{nsu}_{tipo}_{schema}.xml`** (trecho do schema sanitizado).
+- **Motivo dos sufixos:** a mesma chave pode receber **evento** e **nota** na fila da AN; nome único `chave.xml` fazia o segundo arquivo ser ignorado se o primeiro já existisse.
+- **cStat (DistDFe AN):** **`138`** = documento(s) localizado(s) (há `docZip` a processar); **`137`** = nenhum documento localizado (fim de “sem novos” nesse fluxo). **`656`** = consumo indevido (uso indevido de NSU / frequência; costuma exigir espera ~1 h). A UI pode exibir **timer** por certificado após 656; **não há** ação manual “limpar timer” — o registro é atualizado após operações bem-sucedidas ou expira conforme o tempo estimado.
+- **Pastas `sem-data/00`:** usadas quando a data de emissão não puder ser extraída do XML; a listagem “Arquivos salvos” também inclui essas pastas.
+- O CNPJ informado na sincronização deve ser o **mesmo do certificado** configurado (validação na UI).
+
+### 9.2 NFC-e — relatório comparativo (XLSX)
+
+- Gerado no download em lote (opção “gerar agora”) ou na aba Relatório a partir da pasta dos XMLs baixados.
+- **Nomes dos arquivos:** `{Razão social ou fallback} - {CNPJ14} - comparativo_aprovado.xlsx` e `... - comparativo_cancelamento.xlsx` (caracteres inválidos em nome de arquivo são sanitizados).
+- Coluna de valor: número real no Excel com formato `#,##0.00` (exibição com vírgula depende do Excel/locale do Windows).
 
 ---
 

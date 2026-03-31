@@ -6,14 +6,19 @@ import { nfeDistDFeInteresse } from './nfe'
 import { montarDistDfeIntListagemNsu, formatarUltNsu } from './nfe-dist-dfe-build'
 import {
   compararNsu,
+  devePersistirDocumentoDistDfe,
   extrairAnoMesEmissao,
   extrairChaveAcesso44,
   extrairXmlRetDistDfeInt,
+  inferirTipoArquivoDistDfe,
   maiorNsuDosDocumentos,
   maxNsuValidoParaTerminoSincronia,
   parsearRetDistDfeInt,
   resumirTiposDocZipPorSchema,
+  type DistDfeFiltroPapel,
 } from './nfe-dist-dfe-parser'
+
+export type { DistDfeFiltroPapel }
 
 export interface NfeDistDfeSyncStateFile {
   ultNSU: string
@@ -27,8 +32,10 @@ export interface NfeDistDfeSyncProgresso {
   cStat?: string
   loteSalvos?: number
   loteIgnorados?: number
+  loteFiltrados?: number
   totalSalvos?: number
   totalIgnorados?: number
+  totalFiltrados?: number
   mensagem?: string
 }
 
@@ -36,6 +43,7 @@ export interface NfeDistDfeSyncResultado {
   ok: boolean
   totalSalvos: number
   totalIgnorados: number
+  totalFiltrados: number
   ultNSU: string
   lotes: number
   xMotivo?: string
@@ -114,10 +122,15 @@ function salvarDocumento(
 ): 'salvo' | 'ignorado' {
   const cnpj = cnpj14.replace(/\D/g, '')
   const chave = extrairChaveAcesso44(xml)
+  const tipo = inferirTipoArquivoDistDfe(schema, xml)
   const am = extrairAnoMesEmissao(xml)
   const ano = am?.ano ?? 'sem-data'
   const mes = am?.mes ?? '00'
-  const nomeArquivo = chave ? `${chave}.xml` : `NSU_${nsu}_${schema.replace(/[^a-zA-Z0-9_-]/g, '_')}.xml`
+  const nsuSeguro = (nsu || '0').replace(/\D/g, '') || '0'
+  const schCurto = schema.replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 48) || 'doc'
+  const nomeArquivo = chave
+    ? `${chave}_${tipo}.xml`
+    : `NSU_${nsuSeguro}_${tipo}_${schCurto}.xml`
 
   const dir = path.join(pastaRaiz, cnpj, ano, mes)
   fs.mkdirSync(dir, { recursive: true })
@@ -131,7 +144,8 @@ function salvarDocumento(
 export type ProgressCallback = (p: NfeDistDfeSyncProgresso) => void
 
 /**
- * Sincronização contínua: loop NSU até 138 ou ultNSU >= maxNSU; grava XMLs em CNPJ/ano/mês/chave.xml
+ * Sincronização contínua: loop NSU até 138 ou ultNSU >= maxNSU; grava em CNPJ/ano/mês/
+ * como chave_procNFe.xml | chave_resNFe.xml | chave_evento.xml (evita sobrescrever nota com evento).
  */
 export async function sincronizarDistDfeNfe(params: {
   config: ConfigCertNfe
@@ -141,19 +155,24 @@ export async function sincronizarDistDfeNfe(params: {
   cUFAutor: string
   /** Se true, ignora estado e começa do NSU 0 */
   reiniciarNsu: boolean
+  /** Restringe o que grava em disco (NSU continua avançando). */
+  filtroPapel?: DistDfeFiltroPapel
   onProgress?: ProgressCallback
 }): Promise<NfeDistDfeSyncResultado> {
   const { config, agente, pastaRaiz, cnpj14, cUFAutor, reiniciarNsu, onProgress } = params
+  const filtroPapel: DistDfeFiltroPapel = params.filtroPapel ?? 'todos'
 
   let ultNSU = reiniciarNsu ? formatarUltNsu('0') : carregarUltNsu(pastaRaiz, cnpj14)
   let totalSalvos = 0
   let totalIgnorados = 0
+  let totalFiltrados = 0
   let lotes = 0
   escreverDebugSync(pastaRaiz, cnpj14, {
     evento: 'sync_inicio',
     cnpj14: cnpj14.replace(/\D/g, ''),
     cUFAutor,
     reiniciarNsu,
+    filtroPapel,
     ultNSUInicial: ultNSU,
   })
 
@@ -183,6 +202,7 @@ export async function sincronizarDistDfeNfe(params: {
           ok: false,
           totalSalvos,
           totalIgnorados,
+          totalFiltrados,
           ultNSU,
           lotes,
           xMotivo: `${e instanceof Error ? e.message : 'Parse SOAP'} — trecho: ${snippet}`,
@@ -226,6 +246,7 @@ export async function sincronizarDistDfeNfe(params: {
           ok: false,
           totalSalvos,
           totalIgnorados,
+          totalFiltrados,
           ultNSU: ultApos656,
           lotes,
           xMotivo: `[656] ${detalhe}`,
@@ -242,6 +263,7 @@ export async function sincronizarDistDfeNfe(params: {
           maxNSU: ret.maxNSU,
           totalSalvos,
           totalIgnorados,
+          totalFiltrados,
           xMotivo: ret.xMotivo,
         })
         emit({
@@ -251,12 +273,14 @@ export async function sincronizarDistDfeNfe(params: {
           cStat: '137',
           totalSalvos,
           totalIgnorados,
+          totalFiltrados,
           mensagem: ret.xMotivo || 'Sem novos documentos.',
         })
         return {
           ok: true,
           totalSalvos,
           totalIgnorados,
+          totalFiltrados,
           ultNSU: ret.ultNSU,
           lotes,
         }
@@ -274,6 +298,7 @@ export async function sincronizarDistDfeNfe(params: {
           ok: false,
           totalSalvos,
           totalIgnorados,
+          totalFiltrados,
           ultNSU,
           lotes,
           xMotivo: `[${ret.cStat}] ${ret.xMotivo || 'Resposta não sucedida.'}`,
@@ -282,7 +307,13 @@ export async function sincronizarDistDfeNfe(params: {
 
       let loteSalvos = 0
       let loteIgnorados = 0
+      let loteFiltrados = 0
       for (const doc of ret.documentos) {
+        if (!devePersistirDocumentoDistDfe(doc.xmlUtf8, doc.schema, cnpj14, filtroPapel)) {
+          loteFiltrados++
+          totalFiltrados++
+          continue
+        }
         const r = salvarDocumento(pastaRaiz, cnpj14, doc.xmlUtf8, doc.nsu, doc.schema)
         if (r === 'salvo') {
           loteSalvos++
@@ -320,6 +351,7 @@ export async function sincronizarDistDfeNfe(params: {
           ok: false,
           totalSalvos,
           totalIgnorados,
+          totalFiltrados,
           ultNSU: nsuSolicitadoNesteLote,
           lotes,
           xMotivo:
@@ -334,11 +366,13 @@ export async function sincronizarDistDfeNfe(params: {
         tipo: 'lote',
         ultNSU,
         maxNSU: ret.maxNSU,
-        cStat: '137',
+        cStat: '138',
         loteSalvos,
         loteIgnorados,
+        loteFiltrados,
         totalSalvos,
         totalIgnorados,
+        totalFiltrados,
         mensagem: ret.xMotivo,
       })
 
@@ -350,6 +384,7 @@ export async function sincronizarDistDfeNfe(params: {
           maxNSU: ret.maxNSU,
           totalSalvos,
           totalIgnorados,
+          totalFiltrados,
         })
         emit({
           tipo: 'concluido',
@@ -357,9 +392,10 @@ export async function sincronizarDistDfeNfe(params: {
           maxNSU: ret.maxNSU,
           totalSalvos,
           totalIgnorados,
+          totalFiltrados,
           mensagem: 'Último NSU alcançou o máximo informado pela SEFAZ.',
         })
-        return { ok: true, totalSalvos, totalIgnorados, ultNSU, lotes }
+        return { ok: true, totalSalvos, totalIgnorados, totalFiltrados, ultNSU, lotes }
       }
 
       if (ret.documentos.length === 0) {
@@ -370,6 +406,7 @@ export async function sincronizarDistDfeNfe(params: {
           maxNSU: ret.maxNSU,
           totalSalvos,
           totalIgnorados,
+          totalFiltrados,
           xMotivo: ret.xMotivo,
         })
         emit({
@@ -378,9 +415,10 @@ export async function sincronizarDistDfeNfe(params: {
           maxNSU: ret.maxNSU,
           totalSalvos,
           totalIgnorados,
+          totalFiltrados,
           mensagem: 'cStat 137 sem docZip — encerrando para evitar loop.',
         })
-        return { ok: true, totalSalvos, totalIgnorados, ultNSU, lotes }
+        return { ok: true, totalSalvos, totalIgnorados, totalFiltrados, ultNSU, lotes }
       }
     }
 
@@ -388,6 +426,7 @@ export async function sincronizarDistDfeNfe(params: {
       ok: false,
       totalSalvos,
       totalIgnorados,
+      totalFiltrados,
       ultNSU,
       lotes,
       xMotivo: `Limite de ${MAX_LOTES_SEGURANCA} lotes atingido (proteção).`,
@@ -400,6 +439,7 @@ export async function sincronizarDistDfeNfe(params: {
       lotes,
       totalSalvos,
       totalIgnorados,
+      totalFiltrados,
       motivo: msg,
     })
     emit({ tipo: 'erro', mensagem: msg })
@@ -407,6 +447,7 @@ export async function sincronizarDistDfeNfe(params: {
       ok: false,
       totalSalvos,
       totalIgnorados,
+      totalFiltrados,
       ultNSU,
       lotes,
       xMotivo: msg,

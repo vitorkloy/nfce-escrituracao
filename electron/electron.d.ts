@@ -84,6 +84,8 @@ interface NfeSoapResultado {
   resumoDistribuicao?: NfeSoapResumoDistribuicao
 }
 
+type NfeDistDfeFiltroPapel = 'todos' | 'emitente' | 'destinatario'
+
 interface NfeDistDfeSyncProgresso {
   tipo: 'lote' | 'concluido' | 'erro'
   ultNSU?: string
@@ -91,8 +93,10 @@ interface NfeDistDfeSyncProgresso {
   cStat?: string
   loteSalvos?: number
   loteIgnorados?: number
+  loteFiltrados?: number
   totalSalvos?: number
   totalIgnorados?: number
+  totalFiltrados?: number
   mensagem?: string
 }
 
@@ -100,6 +104,7 @@ interface NfeDistDfeSyncResultado {
   ok: boolean
   totalSalvos: number
   totalIgnorados: number
+  totalFiltrados: number
   ultNSU: string
   lotes: number
   xMotivo?: string
@@ -193,7 +198,13 @@ declare global {
         distDfeEstado(pastaRaiz: string, cnpj14: string): Promise<{ ok: boolean; ultNSU?: string; xMotivo?: string }>
         syncDistDfe(
           config: SefazConfig,
-          opts: { pastaRaiz: string; cnpj14: string; cUFAutor: string; reiniciarNsu: boolean }
+          opts: {
+            pastaRaiz: string
+            cnpj14: string
+            cUFAutor: string
+            reiniciarNsu: boolean
+            filtroPapel?: NfeDistDfeFiltroPapel
+          }
         ): Promise<NfeDistDfeSyncResultado>
         listarXmlsSalvos(
           pastaRaiz: string,

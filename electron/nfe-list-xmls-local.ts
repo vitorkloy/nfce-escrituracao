@@ -50,7 +50,10 @@ export function listarXmlsNfeSalvos(
         if (!arq.isFile() || !arq.name.toLowerCase().endsWith('.xml')) continue
         const caminho = path.join(mesPath, arq.name)
         const baseNome = arq.name.replace(/\.xml$/i, '')
-        const chave = /^\d{44}$/.test(baseNome) ? baseNome : baseNome
+        const chaveComTipo = baseNome.match(/^(\d{44})_(procNFe|resNFe|evento|outro)$/)
+        const chave =
+          chaveComTipo?.[1] ??
+          (/^\d{44}$/.test(baseNome) ? baseNome : baseNome)
         out.push({ chave, caminho, ano, mes })
       }
     }

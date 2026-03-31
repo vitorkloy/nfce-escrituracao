@@ -13,8 +13,10 @@
 - 📋 **Listagem de chaves** (NFCeListagemChaves) com paginação automática para listas > 2.000
 - ⬇️ **Download de XML** completo + eventos (NFCeDownloadXML)
 - 📦 **Download em lote** — selecione N chaves e baixe todos os XMLs de uma vez
-- 📊 **Barra de progresso** durante busca e download — bloqueia interação e avisa ao fechar
+- 📊 **Barra de progresso** durante busca e download — overlay global; na listagem de chaves é possível **cancelar** a busca pelo próprio overlay
+- 📑 **Relatório XLSX** (NFC-e): arquivos nomeados com **razão social + CNPJ** (`… - comparativo_aprovado.xlsx` / `… - comparativo_cancelamento.xlsx`); valores monetários gravados como número no Excel (formatação local ao abrir)
 - 🏭 Operação em **Produção** (NFC-e e NF-e)
+- 🔄 **Início direto** no app: sessão começa no módulo **NFC-e**; troca para **NF-e** pela **sidebar** (sem tela inicial de escolha de módulo)
 
 ---
 
@@ -24,9 +26,9 @@
 Renderer (Next.js)              Processo Principal (Node.js)
 ──────────────────              ─────────────────────────────────────
 app/page.tsx                    electron/main.ts
-  │                               ├─ IPC handlers
+  │                               ├─ IPC handlers (NFC-e, NF-e, relatório, fs)
   └─ window.electron.*  ──────►  electron/preload.ts  (contextBridge)
-       (IPC seguro)              electron/sefaz.ts
+       (IPC seguro)              electron/sefaz.ts · electron/nfe*.ts
                                    ├─ PowerShell → lista certs Windows
                                    ├─ Export-PfxCertificate → /tmp/*.pfx
                                    ├─ axios.post mTLS → SEFAZ-SP
@@ -144,11 +146,13 @@ Selecione o arquivo manualmente. **Senha obrigatória** — use o botão Verific
 
 ### NFeDistribuicaoDFe (Ambiente Nacional — NF-e)
 
-Este app também chama **NFeDistribuicaoDFe** na AN para distribuição por **NSU** (documentos autoriz para o CNPJ).
+Este app chama **NFeDistribuicaoDFe** na AN para distribuição por **NSU** (documentos da fila do CNPJ informado).
 
 - **Sempre produção** neste projeto: endpoint `www1.nfe.fazenda.gov.br` e `tpAmb=1` no XML `distDFeInt`.
-- Respostas usuais: `137` (lote com até 50 `docZip`), `138` (sem novos documentos). **`656`** = consumo indevido (NSU incorreto ou frequência excessiva; costuma exigir espera ~1 h).
-- Não substitui listagem por período (`NFCeListagemChaves`); o conjunto de documentos segue as regras da AN para NF-e/DF-e.
+- **cStat usuais:** **`138`** = documento(s) localizado(s) — resposta traz até 50 `docZip` por lote. **`137`** = nenhum documento localizado (fim de sincronização quando não há mais itens novos nesse fluxo). **`656`** = consumo indevido (NSU / frequência; costuma exigir espera ~1 h). A interface pode mostrar um **timer** por certificado após 656 (sem botão manual para limpar o registro).
+- **Armazenamento local (sincronização automática):** `{pasta}/{CNPJ}/.nfe-dist-state.json`, **`sync-debug.log`** (inclui contagem por tipo `procNFe` / `resNFe` / `evento` por lote) e XMLs em **`{pasta}/{CNPJ}/{ano}/{mes}/`** com nomes **`{chave}_procNFe.xml`**, **`{chave}_resNFe.xml`**, **`{chave}_evento.xml`** etc., para **não sobrescrever** nota com evento na mesma chave.
+- O **CNPJ** da sincronização deve coincidir com o **CNPJ do certificado** usado na consulta.
+- Não substitui listagem por período da NFC-e (`NFCeListagemChaves`); o conjunto de documentos segue as regras da AN para NF-e/DF-e.
 - **NFeRecepcaoEvento4:** o conteúdo de `nfeDadosMsg` é envolvido em **CDATA** no SOAP (XML colado pode ter `&`, `<`, etc.). **NFeDistribuicaoDFe:** o `distDFeInt` vai **sem CDATA**, como filho XML literal, para evitar rejeição **243** (XML mal formado) na validação da AN.
 
 ### NFeRecepcaoEvento4 (Ambiente Nacional — NF-e)
