@@ -582,6 +582,18 @@ export async function listarTodasChaves(
   let pagina = 1
   let ultimodhEmis: string | undefined
 
+  function proximaDataHoraInicial(dhEmis: string): string {
+    // Contrato da API: AAAA-MM-DDThh:mm (sem segundos).
+    // Avança 1 minuto para evitar repetir a mesma fronteira da página anterior.
+    const base = String(dhEmis ?? '').trim()
+    const iso = base.length >= 16 ? base.slice(0, 16) : base
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return iso
+    d.setMinutes(d.getMinutes() + 1, 0, 0)
+    const two = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`
+  }
+
   while (pagina <= MAX_PAGINAS) {
     if (shouldCancel?.()) throw new SefazCancelError()
     const resultado = await listarChaves(config, di, dataFinal, { signal, shouldCancel })
@@ -597,7 +609,7 @@ export async function listarTodasChaves(
     }
 
     ultimodhEmis = resultado.dhEmisUltNfce
-    di = resultado.dhEmisUltNfce.substring(0, 16) // AAAA-MM-DDThh:mm
+    di = proximaDataHoraInicial(resultado.dhEmisUltNfce)
 
     pagina++
     console.log(`[SEFAZ] Página ${pagina}/${MAX_PAGINAS}: ${todasChaves.length} chaves. Próximo ponto: ${di}`)
