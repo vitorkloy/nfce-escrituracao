@@ -519,7 +519,8 @@ function parseCertWindows(c: Record<string, string>): CertInfo {
 
   let expirado = false
   if (validade) {
-    try { expirado = new Date(validade) < new Date() } catch { /* mantém false */ }
+    const dt = parseCertificateDate(validade)
+    if (dt) expirado = dt < new Date()
   }
 
   return { thumbprint, subject, cnpj, nome, emissor, validade, expirado, origem: 'store' }
@@ -571,7 +572,8 @@ async function detalhesCertMac(
   const validade = stdout.match(/notAfter=(.+)/)?.[1] ?? ''
   let expirado = false
   if (validade) {
-    try { expirado = new Date(validade) < new Date() } catch { /* mantém false */ }
+    const dt = parseCertificateDate(validade)
+    if (dt) expirado = dt < new Date()
   }
   return { emissor, validade, expirado }
 }
@@ -581,6 +583,68 @@ async function detalhesCertMac(
 function extrairCampo(subject: string, campo: string): string {
   const m = subject.match(new RegExp(`(?:^|,\\s*)${campo}=([^,]+)`, 'i'))
   return m?.[1]?.trim() ?? ''
+}
+
+/**
+ * Datas de certificado podem vir em formatos diferentes por plataforma/localidade.
+ * Retorna undefined quando não for possível interpretar com segurança.
+ */
+function parseCertificateDate(value: string): Date | undefined {
+  const raw = String(value ?? '').trim()
+  if (!raw) return undefined
+
+  // Formato .NET JSON date (PowerShell ConvertTo-Json): /Date(1739994840000)/
+  const dotNet = raw.match(/^\/Date\((\d+)([+-]\d{4})?\)\/$/)
+  if (dotNet) {
+    const ms = Number(dotNet[1])
+    const dt = new Date(ms)
+    if (!Number.isNaN(dt.getTime())) return dt
+  }
+
+  const direct = new Date(raw)
+  if (!Number.isNaN(direct.getTime())) return direct
+
+  // Ex.: 31/12/2026 23:59:59 ou 31-12-2026
+  const br = raw.match(
+    /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/
+  )
+  if (br) {
+    const dd = Number(br[1])
+    const mm = Number(br[2])
+    const yyyy = Number(br[3])
+    const hh = Number(br[4] ?? '0')
+    const mi = Number(br[5] ?? '0')
+    const ss = Number(br[6] ?? '0')
+    const dt = new Date(yyyy, mm - 1, dd, hh, mi, ss)
+    if (!Number.isNaN(dt.getTime())) return dt
+  }
+
+  // Ex.: Jan  2 03:04:05 2027 GMT (openssl enddate)
+  const openssl = raw.match(
+    /^([A-Za-z]{3})\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})\s+(\d{4})\s+GMT$/
+  )
+  if (openssl) {
+    const monthMap: Record<string, number> = {
+      jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+      jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+    }
+    const m = monthMap[openssl[1].toLowerCase()]
+    if (m !== undefined) {
+      const dt = new Date(
+        Date.UTC(
+          Number(openssl[6]),
+          m,
+          Number(openssl[2]),
+          Number(openssl[3]),
+          Number(openssl[4]),
+          Number(openssl[5])
+        )
+      )
+      if (!Number.isNaN(dt.getTime())) return dt
+    }
+  }
+
+  return undefined
 }
 
 function extrairCNPJ(texto: string): string {

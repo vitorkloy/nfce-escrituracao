@@ -72,9 +72,16 @@ export function extractIssuerCnpjFromAccessKey(accessKey: string): string {
 
 export function formatDateOnlyPtBr(isoOrDateString: string): string {
   if (!isoOrDateString) return '–'
-  try {
-    return new Date(isoOrDateString).toLocaleDateString('pt-BR')
-  } catch {
-    return isoOrDateString
+
+  const raw = isoOrDateString.trim()
+  const dotNet = raw.match(/^\/Date\((\d+)([+-]\d{4})?\)\/$/)
+  if (dotNet) {
+    const ms = Number(dotNet[1])
+    const dt = new Date(ms)
+    if (!Number.isNaN(dt.getTime())) return dt.toLocaleDateString('pt-BR')
   }
+
+  const d = new Date(isoOrDateString)
+  if (Number.isNaN(d.getTime())) return isoOrDateString
+  return d.toLocaleDateString('pt-BR')
 }
