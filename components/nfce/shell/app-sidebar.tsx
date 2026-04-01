@@ -18,6 +18,14 @@ type AppSidebarProps = {
   onSelectModule: (modulo: AppModule) => void
 }
 
+type SidebarFooterProps = {
+  activeTab: AppTab
+  onSelectTab: (tab: AppTab) => void
+  appModule: AppModule
+  onSelectModule: (m: AppModule) => void
+  appVersion: string
+}
+
 function SidebarNav({
   tabs,
   activeTab,
@@ -90,6 +98,48 @@ function ModuleToggle({
   )
 }
 
+function SidebarFooter({
+  activeTab,
+  onSelectTab,
+  appModule,
+  onSelectModule,
+  appVersion,
+}: SidebarFooterProps) {
+  return (
+    <div className="px-5 py-4 border-t border-[var(--border)]">
+      <ModuleToggle appModule={appModule} onSelectModule={onSelectModule} />
+
+      <ThemeSelector />
+
+      <div className="my-3 border-t border-[var(--border)]" />
+      
+      <button
+        type="button"
+        onClick={() => onSelectTab('manual')}
+        className={[
+          'mb-3 w-full flex items-center gap-2 px-3 py-2 rounded text-sm no-drag border transition-colors',
+          activeTab === 'manual'
+            ? 'border-[var(--teal-dim)] bg-[var(--teal-glow)] text-[var(--teal)] font-medium'
+            : 'border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-secondary)]',
+        ].join(' ')}
+      >
+        <IonIcon icon={bookOutline} className="w-4 h-4" />
+        Manual
+      </button>
+
+      {appVersion && (
+        <p className="text-xs font-mono mb-1 text-[var(--teal)]" title="Versão do aplicativo">
+          App v{appVersion}
+        </p>
+      )}
+      <p className="text-xs text-[var(--text-muted)]">
+        {appModule === 'nfe' ? 'SAE-NF-e' : 'SAE-NFC-e'} v2.0.0
+      </p>
+      <p className="text-xs text-[var(--text-muted)]">SEFAZ-SP · NT 2026</p>
+    </div>
+  )
+}
+
 export function AppSidebar({
   appModule,
   activeTab,
@@ -142,34 +192,13 @@ export function AppSidebar({
       </div>
 
       <SidebarNav tabs={tabs} activeTab={activeTab} onSelectTab={onSelectTab} />
-
-      <div className="px-5 py-4 border-t border-[var(--border)]">
-        <button
-          type="button"
-          onClick={() => onSelectTab('manual')}
-          className={[
-            'mb-3 w-full flex items-center gap-2 px-3 py-2 rounded text-sm no-drag border transition-colors',
-            activeTab === 'manual'
-              ? 'border-[var(--teal-dim)] bg-[var(--teal-glow)] text-[var(--teal)] font-medium'
-              : 'border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-secondary)]',
-          ].join(' ')}
-        >
-          <IonIcon icon={bookOutline} className="w-4 h-4" />
-          Manual
-        </button>
-
-        <ModuleToggle appModule={appModule} onSelectModule={onSelectModule} />
-        <ThemeSelector />
-        {appVersion && (
-          <p className="text-xs font-mono mb-1 text-[var(--teal)]" title="Versão do aplicativo">
-            App v{appVersion}
-          </p>
-        )}
-        <p className="text-xs text-[var(--text-muted)]">
-          {appModule === 'nfe' ? 'SAE-NF-e' : 'SAE-NFC-e'} v2.0.0
-        </p>
-        <p className="text-xs text-[var(--text-muted)]">SEFAZ-SP · NT 2026</p>
-      </div>
+      <SidebarFooter
+        activeTab={activeTab}
+        onSelectTab={onSelectTab}
+        appModule={appModule}
+        onSelectModule={onSelectModule}
+        appVersion={appVersion}
+      />
     </aside>
   )
 }
