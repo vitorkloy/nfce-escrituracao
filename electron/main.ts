@@ -8,7 +8,6 @@ import Store from 'electron-store'
 import ExcelJS from 'exceljs'
 import {
   listarTodasChaves,
-  listarChaves,
   downloadXml,
   criarAgente,
   SefazError,
@@ -16,7 +15,6 @@ import {
   SefazParseError,
   SefazCancelError,
   type ConfigCert,
-  type ResultadoListagem,
   type ResultadoDownload,
 } from './sefaz'
 import { nfeDistDFeInteresse, nfeRecepcaoEventoNF } from './nfe'
@@ -977,7 +975,7 @@ ipcMain.handle(
     config: ConfigCert & { thumbprint?: string },
     dataInicial: string,
     dataFinal: string | undefined,
-    paginacaoAuto: boolean
+    _paginacaoAuto: boolean
   ) => {
     let pfxPath = ''
     let tmpCriado = false
@@ -995,19 +993,10 @@ ipcMain.handle(
       // CNPJ da matriz (do certificado) — necessário para o filtro de filiais na UI
       const cnpj = await obterCNPJDoCertificado(config)
 
-      if (paginacaoAuto) {
-        const chaves = await listarTodasChaves(cfg, dataInicial, dataFinal, (parcial) => {
-          mainWindow?.webContents.send('sefaz:progresso-listagem', parcial)
-        }, () => cancelarListagemSefaz, abortListagemSefaz.signal)
-        return { ok: true, chaves, total: chaves.length, cnpj }
-      } else {
-        if (cancelarListagemSefaz) throw new SefazCancelError()
-        const resultado: ResultadoListagem = await listarChaves(cfg, dataInicial, dataFinal, {
-          signal: abortListagemSefaz.signal,
-          shouldCancel: () => cancelarListagemSefaz,
-        })
-        return { ok: true, ...resultado, cnpj }
-      }
+      const chaves = await listarTodasChaves(cfg, dataInicial, dataFinal, (parcial) => {
+        mainWindow?.webContents.send('sefaz:progresso-listagem', parcial)
+      }, () => cancelarListagemSefaz, abortListagemSefaz.signal)
+      return { ok: true, chaves, total: chaves.length, cnpj }
     } catch (err: unknown) {
       if (err instanceof SefazCancelError) return { ok: false, xMotivo: 'Consulta cancelada pelo usuário.' }
       return respostaErro(err)

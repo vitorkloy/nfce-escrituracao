@@ -40,7 +40,6 @@ export function KeyListPanel({ appModule, certificateState, showToast, onLoading
 
   const [startDateTime, setStartDateTime] = useState(formatDateForDatetimeLocalInput(monthStart))
   const [endDateTime, setEndDateTime] = useState(formatDateForDatetimeLocalInput(today))
-  const [autoPaginate, setAutoPaginate] = useState(true)
   const [isSearching, setIsSearching] = useState(false)
   const [listingProgress, setListingProgress] = useState(0)
   const [keys, setKeys] = useState<KeyListItem[]>([])
@@ -100,7 +99,7 @@ export function KeyListPanel({ appModule, certificateState, showToast, onLoading
         certificateState as never,
         normalizeDatetimeForSefaz(startDateTime),
         endDateTime ? normalizeDatetimeForSefaz(endDateTime) : undefined,
-        autoPaginate
+        true
       )
 
       if (!response.ok) {
@@ -334,15 +333,6 @@ export function KeyListPanel({ appModule, certificateState, showToast, onLoading
               className={`px-3 py-2 text-sm ${INPUT_BASE_CLASS}`}
             />
           </div>
-          <label className="flex items-center gap-2 cursor-pointer select-none no-drag text-[var(--text-secondary)]">
-            <input
-              type="checkbox"
-              checked={autoPaginate}
-              onChange={(e) => setAutoPaginate(e.target.checked)}
-              className="w-4 h-4 accent-blue-500"
-            />
-            <span className="text-sm">Paginação automática</span>
-          </label>
           <button
             type="button"
             onClick={searchKeys}

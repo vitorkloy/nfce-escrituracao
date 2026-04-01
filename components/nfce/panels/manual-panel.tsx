@@ -5,17 +5,16 @@ export function ManualPanel() {
     <div className="fade-in h-full overflow-auto p-6">
       <h2 className="text-xl font-semibold mb-2 text-[var(--text-primary)]">Manual de uso</h2>
       <p className="text-sm text-[var(--text-secondary)] mb-6">
-        Guia prático do aplicativo Escrituração Fiscal, do início ao fim.
+        Passo a passo rápido para usar o sistema sem complicação.
       </p>
 
       <section className="mb-5 rounded border border-[var(--border)] bg-[var(--bg-surface)] p-4">
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">0) Módulo NFC-e ou NF-e</h3>
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
           <li>
-            Ao abrir, o aplicativo inicia no módulo <strong>NFC-e</strong>. A troca para <strong>NF-e</strong> é feita na{' '}
-            <strong>barra lateral</strong>; a escolha vale só para a sessão atual (<strong>não é gravada</strong> no disco).
+            Ao abrir, o sistema entra no módulo <strong>NFC-e</strong>. Se precisar, troque para <strong>NF-e</strong> na barra lateral.
           </li>
-          <li>A navegação e as funções mudam conforme o módulo ativo.</li>
+          <li>As telas e funções mudam de acordo com o módulo escolhido.</li>
         </ul>
       </section>
 
@@ -23,9 +22,9 @@ export function ManualPanel() {
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">1) Configurar certificado</h3>
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
           <li>Acesse a aba <strong>Certificado</strong>.</li>
-          <li>Escolha a origem: repositório do sistema ou arquivo `.pfx`.</li>
-          <li>O ambiente é fixo em <strong>Produção</strong> neste aplicativo.</li>
-          <li>Se for arquivo, informe a senha do certificado.</li>
+          <li>Escolha: certificado do Windows (recomendado) ou arquivo <code className="text-[11px]">.pfx</code>.</li>
+          <li>Se for <code className="text-[11px]">.pfx</code>, informe a senha.</li>
+          <li>O sistema trabalha em <strong>Produção</strong>.</li>
         </ul>
       </section>
 
@@ -36,8 +35,10 @@ export function ManualPanel() {
           <li>Informe o período (data inicial e final).</li>
           <li>Clique em <strong>Buscar</strong> para carregar as chaves de acesso.</li>
           <li>
-            Durante a busca, o overlay global mostra o progresso; use <strong>Cancelar busca</strong> no overlay para
-            interromper.
+            A paginação é <strong>automática</strong> e continua até trazer tudo do período.
+          </li>
+          <li>
+            Durante a busca, aparece uma tela de progresso. Se precisar, use <strong>Cancelar busca</strong>.
           </li>
           <li>Use filtros de emitente e texto para localizar o que precisa.</li>
         </ul>
@@ -49,7 +50,7 @@ export function ManualPanel() {
           <li>Selecione as chaves desejadas.</li>
           <li>Clique em <strong>Baixar XMLs</strong>.</li>
           <li>Escolha a pasta de destino.</li>
-          <li>No modal, selecione se o relatório XLSX deve ser gerado <strong>agora</strong> ou <strong>depois</strong>.</li>
+          <li>Escolha se o relatório XLSX será gerado <strong>agora</strong> ou <strong>depois</strong>.</li>
         </ul>
       </section>
 
@@ -66,12 +67,10 @@ export function ManualPanel() {
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">5) Gerar relatório interno (XLSX)</h3>
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
           <li>Vá para a aba <strong>Relatório</strong>.</li>
-          <li>Selecione a pasta onde os `*_nfce.xml` estão salvos.</li>
+          <li>Selecione a pasta onde os XMLs da NFC-e estão salvos.</li>
           <li>Veja a prévia dos arquivos e o total encontrado.</li>
           <li>
-            Clique em <strong>Gerar XLSX</strong> para criar os arquivos com nome no formato{' '}
-            <strong>Razão social · CNPJ · comparativo_aprovado/cancelamento.xlsx</strong> (emitente extraído dos XMLs;
-            caracteres inválidos no nome de arquivo são ajustados).
+            Clique em <strong>Gerar XLSX</strong> para criar os relatórios de aprovadas e canceladas.
           </li>
         </ul>
       </section>
@@ -79,24 +78,15 @@ export function ManualPanel() {
       <section className="rounded border border-[var(--border)] bg-[var(--bg-surface)] p-4">
         <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2">Observações importantes</h3>
         <ul className="list-disc pl-5 text-sm text-[var(--text-secondary)] space-y-1">
-          <li>Não feche o app durante buscas ou downloads em andamento.</li>
+          <li>Não feche o app durante busca ou download.</li>
           <li>
-            No módulo <strong>NF-e</strong> há <strong>NFeDistribuicaoDFe</strong> e{' '}
-            <strong>NFeRecepcaoEvento4</strong> (produção AN). Em <strong>Distribuição DFe</strong>, use{' '}
-            <strong>Sincronização automática</strong> para baixar XMLs em loop (NSU), gravando em{' '}
-            <code className="text-[11px]">pasta/CNPJ/ano/mês/</code> com nomes{' '}
-            <code className="text-[11px]">chave_procNFe.xml</code>, <code className="text-[11px]">chave_resNFe.xml</code>,{' '}
-            <code className="text-[11px]">chave_evento.xml</code> (etc.), para não misturar nota e evento na mesma chave;
-            pular se o mesmo tipo já existir; último NSU em <code className="text-[11px]">.nfe-dist-state.json</code>; log de
-            diagnóstico em <code className="text-[11px]">sync-debug.log</code>. Há também <strong>XML livre</strong> e a aba{' '}
-            <strong>Arquivos salvos</strong>. O CNPJ da sincronização deve ser o do certificado configurado.
+            No módulo <strong>NF-e</strong>, a sincronização da <strong>Distribuição DFe</strong> baixa os XMLs em sequência
+            e organiza em pastas por CNPJ/ano/mês.
           </li>
           <li>
-            O XLSX inclui uma linha inicial com <strong>EMPRESA</strong> e <strong>CNPJ</strong> (extraídos do XML),
-            cabeçalho estilizado e colunas número do documento, data de emissão e valor do cupom (valor numérico no
-            arquivo; vírgula decimal ao abrir depende do Excel/locale).
+            O relatório XLSX já sai pronto para abrir no Excel, com dados de empresa, número, data e valor.
           </li>
-          <li>O arquivo abre direto no Excel, sem precisar importar como texto.</li>
+          <li>Se houver lentidão em períodos longos, aguarde a conclusão ou cancele e teste um intervalo menor.</li>
         </ul>
       </section>
     </div>

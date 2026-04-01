@@ -447,6 +447,8 @@ function parseListagem(xmlStr: string): ResultadoListagem {
 
   const dhEmisRaw = ret.dhEmisUltNfce
   const dhEmisUltNfce = dhEmisRaw ? String(dhEmisRaw) : undefined
+  const loteCheioComPontoDeContinuidade = Boolean(dhEmisUltNfce && chaves.length >= 2000)
+  const incompleto = cStat === '101' || loteCheioComPontoDeContinuidade
 
   return {
     cStat,
@@ -455,7 +457,7 @@ function parseListagem(xmlStr: string): ResultadoListagem {
     dhReq:         String(ret.dhReq  ?? ''),
     chaves,
     dhEmisUltNfce,
-    incompleto:    cStat === '101',
+    incompleto,
   }
 }
 

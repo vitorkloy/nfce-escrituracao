@@ -1,7 +1,7 @@
 'use client'
 
 import { IonIcon } from '@ionic/react'
-import { documentTextOutline } from 'ionicons/icons'
+import { bookOutline, documentTextOutline } from 'ionicons/icons'
 import { ThemeSelector } from '@/components/nfce/theme-selector'
 import type { AppModule, AppTab, CertificateUiState, NavTabConfig } from '@/types/nfce-app'
 import { navTabsForModule } from './nav-config'
@@ -144,6 +144,20 @@ export function AppSidebar({
       <SidebarNav tabs={tabs} activeTab={activeTab} onSelectTab={onSelectTab} />
 
       <div className="px-5 py-4 border-t border-[var(--border)]">
+        <button
+          type="button"
+          onClick={() => onSelectTab('manual')}
+          className={[
+            'mb-3 w-full flex items-center gap-2 px-3 py-2 rounded text-sm no-drag border transition-colors',
+            activeTab === 'manual'
+              ? 'border-[var(--teal-dim)] bg-[var(--teal-glow)] text-[var(--teal)] font-medium'
+              : 'border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-secondary)]',
+          ].join(' ')}
+        >
+          <IonIcon icon={bookOutline} className="w-4 h-4" />
+          Manual
+        </button>
+
         <ModuleToggle appModule={appModule} onSelectModule={onSelectModule} />
         <ThemeSelector />
         {appVersion && (
