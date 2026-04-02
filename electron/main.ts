@@ -132,8 +132,14 @@ function parseValorMonetarioRelatorio(raw: string | undefined): number | null {
   if (!raw) return null
   const limpo = raw.trim()
   if (!limpo) return null
-  // Aceita "1234.56" e "1234,56" para gravar como número real no XLSX.
-  const normalizado = limpo.replace(/\./g, '').replace(',', '.')
+  // XML NFC-e/NFe (vNF): ponto como separador decimal, sem separador de milhar — ex.: "63.33".
+  // Se houver vírgula, interpreta como formato BR visual — ex.: "1.234,56".
+  let normalizado: string
+  if (limpo.includes(',')) {
+    normalizado = limpo.replace(/\./g, '').replace(',', '.')
+  } else {
+    normalizado = limpo.replace(/\s/g, '')
+  }
   const n = Number(normalizado)
   return Number.isFinite(n) ? n : null
 }
