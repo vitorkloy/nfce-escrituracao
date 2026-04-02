@@ -90,7 +90,6 @@ export default function Home() {
         phase={autoUpdate.updatePhase}
         currentVersion={autoUpdate.currentAppVersion}
         remoteVersion={autoUpdate.updateRemoteVersion}
-        releaseNotes={autoUpdate.updateReleaseNotes}
         percent={autoUpdate.updatePercent}
         errorMessage={autoUpdate.updateErrorMessage}
         onDismiss={autoUpdate.dismissUpdateModal}

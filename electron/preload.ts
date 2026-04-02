@@ -158,8 +158,8 @@ contextBridge.exposeInMainWorld('electron', {
     download: () =>
       ipcRenderer.invoke('updater:download') as Promise<{ ok: true } | { ok: false; message: string }>,
     install: () => ipcRenderer.invoke('updater:install') as Promise<boolean>,
-    onUpdateAvailable: (cb: (info: { version: string; releaseNotes: string }) => void) => {
-      const fn = (_e: Electron.IpcRendererEvent, info: { version: string; releaseNotes: string }) => cb(info)
+    onUpdateAvailable: (cb: (info: { version: string }) => void) => {
+      const fn = (_e: Electron.IpcRendererEvent, info: { version: string }) => cb(info)
       ipcRenderer.on('updater:update-available', fn)
       return () => ipcRenderer.removeListener('updater:update-available', fn)
     },

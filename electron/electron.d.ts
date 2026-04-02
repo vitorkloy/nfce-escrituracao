@@ -260,7 +260,7 @@ declare global {
         >
         download(): Promise<{ ok: true } | { ok: false; message: string }>
         install(): Promise<boolean>
-        onUpdateAvailable(cb: (info: { version: string; releaseNotes: string }) => void): () => void
+        onUpdateAvailable(cb: (info: { version: string }) => void): () => void
         onDownloadProgress(
           cb: (p: { percent: number; transferred: number; total: number }) => void
         ): () => void

@@ -11,24 +11,6 @@ function createSender(getWindow: () => BrowserWindow | null): SendFn {
   }
 }
 
-function releaseNotesToString(notes: unknown): string {
-  if (notes == null) return ''
-  if (typeof notes === 'string') return notes
-  if (Array.isArray(notes)) {
-    return notes
-      .map((item) => {
-        if (typeof item === 'string') return item
-        if (item && typeof item === 'object' && 'note' in item) {
-          return String((item as { note?: string }).note ?? '')
-        }
-        return ''
-      })
-      .filter(Boolean)
-      .join('\n')
-  }
-  return String(notes)
-}
-
 let ipcRegistered = false
 let listenersAttached = false
 
@@ -81,10 +63,8 @@ export function attachUpdaterListeners(isPackaged: boolean, getWindow: () => Bro
   autoUpdater.autoInstallOnAppQuit = false
 
   autoUpdater.on('update-available', (info) => {
-    send('updater:update-available', {
-      version: info.version,
-      releaseNotes: releaseNotesToString(info.releaseNotes),
-    })
+    // Não repassar releaseNotes do GitHub (mensagens de commit / metadados indesejados na UI).
+    send('updater:update-available', { version: info.version })
   })
 
   autoUpdater.on('update-not-available', () => {

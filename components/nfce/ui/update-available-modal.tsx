@@ -7,7 +7,6 @@ export function UpdateAvailableModal({
   phase,
   currentVersion,
   remoteVersion,
-  releaseNotes,
   percent,
   errorMessage,
   onDismiss,
@@ -18,7 +17,6 @@ export function UpdateAvailableModal({
   phase: UpdateUiPhase
   currentVersion: string
   remoteVersion: string
-  releaseNotes: string
   percent: number
   errorMessage: string
   onDismiss: () => void
@@ -46,12 +44,6 @@ export function UpdateAvailableModal({
             Atualize para obter correções e melhorias.
           </p>
         </div>
-
-        {releaseNotes && phase === 'available' && (
-          <div className="px-5 py-3 max-h-32 overflow-y-auto text-xs text-[var(--text-muted)] border-b border-[var(--border)] whitespace-pre-wrap">
-            {releaseNotes}
-          </div>
-        )}
 
         {phase === 'downloading' && (
           <div className="px-5 py-4">

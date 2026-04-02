@@ -13,7 +13,6 @@ export function useAutoUpdater(
   const [open, setOpen] = useState(false)
   const [phase, setPhase] = useState<UpdateUiPhase>('idle')
   const [remoteVersion, setRemoteVersion] = useState('')
-  const [releaseNotes, setReleaseNotes] = useState('')
   const [percent, setPercent] = useState(0)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -23,7 +22,6 @@ export function useAutoUpdater(
 
     const offAvail = u.onUpdateAvailable((info) => {
       setRemoteVersion(info.version)
-      setReleaseNotes(info.releaseNotes?.trim() ?? '')
       setPhase('available')
       setOpen(true)
       setErrorMessage('')
@@ -83,7 +81,6 @@ export function useAutoUpdater(
     updateModalOpen: open,
     updatePhase: phase,
     updateRemoteVersion: remoteVersion,
-    updateReleaseNotes: releaseNotes,
     updatePercent: percent,
     updateErrorMessage: errorMessage,
     currentAppVersion: currentVersion,
