@@ -148,4 +148,36 @@ contextBridge.exposeInMainWorld('electron', {
     setTheme: (t: 'light' | 'dark' | 'system') =>
       ipcRenderer.invoke('ui:set-theme', t) as Promise<boolean>,
   },
+
+  updater: {
+    check: () =>
+      ipcRenderer.invoke('updater:check') as Promise<
+        | { ok: true; skipped?: true; updateInfo?: { version: string } }
+        | { ok: false; message: string }
+      >,
+    download: () =>
+      ipcRenderer.invoke('updater:download') as Promise<{ ok: true } | { ok: false; message: string }>,
+    install: () => ipcRenderer.invoke('updater:install') as Promise<boolean>,
+    onUpdateAvailable: (cb: (info: { version: string; releaseNotes: string }) => void) => {
+      const fn = (_e: Electron.IpcRendererEvent, info: { version: string; releaseNotes: string }) => cb(info)
+      ipcRenderer.on('updater:update-available', fn)
+      return () => ipcRenderer.removeListener('updater:update-available', fn)
+    },
+    onDownloadProgress: (cb: (p: { percent: number; transferred: number; total: number }) => void) => {
+      const fn = (_e: Electron.IpcRendererEvent, p: { percent: number; transferred: number; total: number }) =>
+        cb(p)
+      ipcRenderer.on('updater:download-progress', fn)
+      return () => ipcRenderer.removeListener('updater:download-progress', fn)
+    },
+    onUpdateDownloaded: (cb: (info: { version: string }) => void) => {
+      const fn = (_e: Electron.IpcRendererEvent, info: { version: string }) => cb(info)
+      ipcRenderer.on('updater:update-downloaded', fn)
+      return () => ipcRenderer.removeListener('updater:update-downloaded', fn)
+    },
+    onUpdaterError: (cb: (info: { message: string }) => void) => {
+      const fn = (_e: Electron.IpcRendererEvent, info: { message: string }) => cb(info)
+      ipcRenderer.on('updater:error', fn)
+      return () => ipcRenderer.removeListener('updater:error', fn)
+    },
+  },
 })

@@ -42,6 +42,10 @@ Fluxo sugerido:
 
 ---
 
-## Atualização automática (futuro)
+## CI/CD e atualização automática
 
-Para o app **baixar e instalar** novas versões sozinho, seria necessário integrar algo como **`electron-updater`** + hospedar metadados (ex.: `latest.yml` no GitHub Releases). Não está implementado hoje; o fluxo atual é **instalador manual** por release.
+- **GitHub Actions** (`.github/workflows/release.yml`): em cada `push` na `main` cujo commit **não** contenha `[skip ci]`, o workflow incrementa o **patch** em `package.json`, roda `npm run release:win` e publica o instalador e o **`latest.yml`** no **GitHub Releases** (`electron-builder` + `GH_TOKEN`).
+- O commit automático do bump inclui **`[skip ci]`** para não disparar o workflow em loop.
+- No app empacotado, **`electron-updater`** consulta essas releases e exibe o modal de atualização (baixar + instalar). Em `npm run dev` a checagem é ignorada no processo principal.
+
+Se a branch `main` estiver **protegida** contra push direto do `GITHUB_TOKEN`, configure um secret (PAT com `repo`) e use no passo de `git push`, ou ajuste as regras da branch.

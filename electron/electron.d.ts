@@ -253,6 +253,20 @@ declare global {
         getTheme(): Promise<ThemePreference>
         setTheme(t: ThemePreference): Promise<boolean>
       }
+      updater: {
+        check(): Promise<
+          | { ok: true; skipped?: true; updateInfo?: { version: string } }
+          | { ok: false; message: string }
+        >
+        download(): Promise<{ ok: true } | { ok: false; message: string }>
+        install(): Promise<boolean>
+        onUpdateAvailable(cb: (info: { version: string; releaseNotes: string }) => void): () => void
+        onDownloadProgress(
+          cb: (p: { percent: number; transferred: number; total: number }) => void
+        ): () => void
+        onUpdateDownloaded(cb: (info: { version: string }) => void): () => void
+        onUpdaterError(cb: (info: { message: string }) => void): () => void
+      }
     }
   }
 }

@@ -27,6 +27,7 @@ import type { DistDfeFiltroPapel } from './nfe-dist-dfe-parser'
 import { sincronizarDistDfeNfe, carregarUltNsu } from './nfe-dist-dfe-sync'
 import type { NfeDistDfeSyncProgresso } from './nfe-dist-dfe-sync'
 import { listarXmlsNfeSalvos, type NfeXmlSalvoInfo } from './nfe-list-xmls-local'
+import { attachUpdaterListeners, registerUpdaterIpc, scheduleInitialUpdateCheck } from './updater'
 
 const execAsync = promisify(exec)
 const execFileAsync = promisify(execFile)
@@ -349,6 +350,10 @@ app.whenReady().then(() => {
   nativeTheme.on('updated', () => updateMainWindowBackground())
 
   createWindow()
+  registerUpdaterIpc(app.isPackaged)
+  attachUpdaterListeners(app.isPackaged, () => mainWindow)
+  scheduleInitialUpdateCheck(app.isPackaged)
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

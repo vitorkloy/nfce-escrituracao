@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AppSidebar, MainPanelArea } from '@/components/nfce/shell'
 import { LoadingOverlay } from '@/components/nfce/ui/loading-overlay'
+import { UpdateAvailableModal } from '@/components/nfce/ui/update-available-modal'
 import { ToastStack } from '@/components/nfce/ui/toast-stack'
 import { useCertificatePersistence } from '@/hooks/use-certificate-persistence'
 import { useElectronAppMeta } from '@/hooks/use-electron-app-meta'
+import { useAutoUpdater } from '@/hooks/use-auto-updater'
 import { useToastStack } from '@/hooks/use-toast-stack'
 import { useIsElectron } from '@/hooks/useIsElectron'
 import type { AppModule, AppTab, LoadingUiState } from '@/types/nfce-app'
@@ -15,6 +17,7 @@ export default function Home() {
   const { toasts, showToast, dismissToast } = useToastStack()
   const { certificateState, setCertificateState } = useCertificatePersistence(isElectron)
   const { appVersion, appModule, persistModuleSelection } = useElectronAppMeta(isElectron)
+  const autoUpdate = useAutoUpdater(isElectron, appVersion, showToast)
 
   const [activeTab, setActiveTab] = useState<AppTab>('config')
   const [loadingUi, setLoadingUi] = useState<LoadingUiState>({ type: null })
@@ -81,6 +84,19 @@ export default function Home() {
       />
 
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
+
+      <UpdateAvailableModal
+        open={autoUpdate.updateModalOpen}
+        phase={autoUpdate.updatePhase}
+        currentVersion={autoUpdate.currentAppVersion}
+        remoteVersion={autoUpdate.updateRemoteVersion}
+        releaseNotes={autoUpdate.updateReleaseNotes}
+        percent={autoUpdate.updatePercent}
+        errorMessage={autoUpdate.updateErrorMessage}
+        onDismiss={autoUpdate.dismissUpdateModal}
+        onDownload={() => void autoUpdate.startUpdateDownload()}
+        onInstall={() => void autoUpdate.installUpdate()}
+      />
 
       {loadingUi.type && (
         <LoadingOverlay
