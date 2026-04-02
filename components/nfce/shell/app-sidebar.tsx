@@ -36,14 +36,17 @@ function SidebarNav({
   onSelectTab: (tab: AppTab) => void
 }) {
   return (
-    <nav className="flex flex-col gap-0.5 px-3 flex-1" aria-label="Navegação principal">
+    <nav
+      className="grid grid-cols-2 gap-2 px-3 py-2 md:py-0 md:flex md:flex-col md:gap-0.5 md:flex-1"
+      aria-label="Navegação principal"
+    >
       {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"
           onClick={() => onSelectTab(tab.id)}
           className={[
-            'flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-all text-left no-drag',
+            'flex items-center gap-2 px-3 py-2 rounded text-sm transition-all text-left no-drag md:gap-3 md:py-2.5',
             activeTab === tab.id
               ? 'bg-[var(--teal-glow)] text-[var(--teal)] font-medium'
               : 'bg-transparent text-[var(--text-secondary)] font-normal',
@@ -106,13 +109,7 @@ function SidebarFooter({
   appVersion,
 }: SidebarFooterProps) {
   return (
-    <div className="px-5 py-4 border-t border-[var(--border)]">
-      <ModuleToggle appModule={appModule} onSelectModule={onSelectModule} />
-
-      <ThemeSelector />
-
-      <div className="my-3 border-t border-[var(--border)]" />
-      
+    <div className="px-4 md:px-5 py-3 md:py-4 border-t border-[var(--border)]">
       <button
         type="button"
         onClick={() => onSelectTab('manual')}
@@ -126,6 +123,11 @@ function SidebarFooter({
         <IonIcon icon={bookOutline} className="w-4 h-4" />
         Manual
       </button>
+
+      <ModuleToggle appModule={appModule} onSelectModule={onSelectModule} />
+      <ThemeSelector />
+
+      <div className="my-3 border-t border-[var(--border)]" />
 
       {appVersion && (
         <p className="text-xs font-mono mb-1 text-[var(--teal)]" title="Versão do aplicativo">
@@ -153,9 +155,9 @@ export function AppSidebar({
   const tabs = navTabsForModule(appModule)
 
   return (
-    <aside className="flex flex-col w-56 shrink-0 bg-[var(--bg-base)] border-r border-[var(--border)]">
-      <div className="drag-region h-8 shrink-0" />
-      <div className="px-5 pb-6">
+    <aside className="flex flex-col w-full md:w-56 shrink-0 bg-[var(--bg-base)] border-b md:border-b-0 md:border-r border-[var(--border)]">
+      <div className="drag-region h-8 shrink-0 hidden md:block" />
+      <div className="px-4 md:px-5 pt-3 md:pt-0 pb-4 md:pb-6">
         <div className="flex items-center gap-2.5 mb-1">
           <IonIcon icon={documentTextOutline} className="text-2xl text-[var(--teal)]" />
           <span className="font-semibold text-sm leading-tight text-[var(--text-primary)]">

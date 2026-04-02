@@ -167,7 +167,7 @@ function extrairEmitenteDoNfceXml(xmlStr: string): CabecalhoEmpresaRelatorio {
 }
 
 async function gerarComparativoXlsxBuffer(
-  linhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string }>,
+  linhas: Array<{ chave: string; dhEmi?: string; serie?: string; nNF?: string; vNF?: string }>,
   cabecalhoEmpresa?: CabecalhoEmpresaRelatorio
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
@@ -177,11 +177,17 @@ async function gerarComparativoXlsxBuffer(
 
   const nomeEmpresa = (cabecalhoEmpresa?.nome ?? '').trim() || '—'
   const cnpjFmt = formatarCnpjRelatorioDigitos(cabecalhoEmpresa?.cnpj)
-  ws.mergeCells('A1:C1')
+  ws.mergeCells('A1:E1')
   ws.getCell('A1').value = `EMPRESA : ${nomeEmpresa}    |    CNPJ ${cnpjFmt}`
   ws.getCell('A1').font = { bold: true, color: { argb: 'FFB91C1C' }, size: 12 }
 
-  const headerRow = ws.addRow(['Número do documento', 'Data de emissão', 'Valor do cupom'])
+  const headerRow = ws.addRow([
+    'Série',
+    'Número do documento',
+    'Data de emissão',
+    'Valor do cupom',
+    'Chave de acesso',
+  ])
   headerRow.font = { bold: true, color: { argb: 'FF111827' } }
   headerRow.fill = {
     type: 'pattern',
@@ -195,21 +201,40 @@ async function gerarComparativoXlsxBuffer(
     right: { style: 'thin', color: { argb: 'FFD1D5DB' } },
   }
 
+  let somaValores = 0
   for (const l of linhas) {
     const vNfNumero = parseValorMonetarioRelatorio(l.vNF)
-    const row = ws.addRow([l.nNF ?? '', l.dhEmi ?? '', vNfNumero ?? l.vNF ?? ''])
+    if (vNfNumero != null) somaValores += vNfNumero
+    const row = ws.addRow([
+      l.serie ?? '',
+      l.nNF ?? '',
+      l.dhEmi ?? '',
+      vNfNumero ?? l.vNF ?? '',
+      l.chave ?? '',
+    ])
     row.getCell(1).numFmt = '@'
-    row.getCell(3).numFmt = '#,##0.00'
+    row.getCell(2).numFmt = '@'
+    row.getCell(4).numFmt = '#,##0.00'
+    row.getCell(5).numFmt = '@'
+  }
+
+  if (linhas.length > 0) {
+    const totalRow = ws.addRow(['', '', 'Total geral', somaValores, ''])
+    totalRow.getCell(3).font = { bold: true }
+    totalRow.getCell(4).numFmt = '#,##0.00'
+    totalRow.getCell(4).font = { bold: true }
   }
 
   ws.columns = [
+    { width: 12 },
     { width: 24 },
     { width: 28 },
     { width: 18 },
+    { width: 50 },
   ]
   ws.autoFilter = {
     from: 'A2',
-    to: 'C2',
+    to: 'E2',
   }
 
   const buffer = await wb.xlsx.writeBuffer()
@@ -1049,7 +1074,14 @@ ipcMain.handle(
     let pfxPath = ''
     let tmpCriado = false
     const resultados: { chave: string; ok: boolean; erro?: string }[] = []
-    const relatorioLinhas: Array<{ chave: string; dhEmi?: string; nNF?: string; vNF?: string; cancelada?: boolean }> = []
+    const relatorioLinhas: Array<{
+      chave: string
+      dhEmi?: string
+      serie?: string
+      nNF?: string
+      vNF?: string
+      cancelada?: boolean
+    }> = []
     let cabecalhoEmpresaRelatorio: CabecalhoEmpresaRelatorio | undefined
     let relatorioFalhas = 0
 
@@ -1111,6 +1143,7 @@ ipcMain.handle(
                 relatorioLinhas.push({
                   chave,
                   dhEmi: resultado.nfeProc.dhEmi,
+                  serie: resultado.nfeProc.serie,
                   nNF: resultado.nfeProc.nNF,
                   vNF: resultado.nfeProc.vNF,
                   cancelada,
@@ -1467,13 +1500,21 @@ ipcMain.handle('fs:ler-arquivo-utf8', async (_e, caminhoArquivo: string) => {
 // IPC — Relatório interno (XLSX comparativo)
 // ---------------------------------------------------------------------------
 
-function extrairRelatorioDoXml(xmlStr: string): { chave?: string; nProt?: string; dhEmi?: string; nNF?: string; vNF?: string } {
+function extrairRelatorioDoXml(xmlStr: string): {
+  chave?: string
+  nProt?: string
+  dhEmi?: string
+  serie?: string
+  nNF?: string
+  vNF?: string
+} {
   const chave = xmlStr.match(/<infNFe[^>]*Id="NFe(\d{44})"/)?.[1]
   const nProt = xmlStr.match(/<nProt>([^<]+)<\/nProt>/)?.[1]?.trim()
+  const serie = xmlStr.match(/<serie>([^<]+)<\/serie>/)?.[1]?.trim()
   const nNF = xmlStr.match(/<nNF>([^<]+)<\/nNF>/)?.[1]?.trim()
   const vNF = xmlStr.match(/<vNF>([^<]+)<\/vNF>/)?.[1]?.trim()
   const dhEmi = xmlStr.match(/<dhEmi>([^<]+)<\/dhEmi>/)?.[1]?.trim()
-  return { chave, nProt, dhEmi, nNF, vNF }
+  return { chave, nProt, dhEmi, serie, nNF, vNF }
 }
 
 ipcMain.handle('relatorio:comparativo-xlsx', async (_e, pastaSaida: string) => {
@@ -1485,7 +1526,7 @@ ipcMain.handle('relatorio:comparativo-xlsx', async (_e, pastaSaida: string) => {
     const nfceArquivos = entries.filter((f) => /_nfce\.xml$/i.test(f))
     const eventoArquivos = entries.filter((f) => /_evento\.xml$/i.test(f))
 
-    const linhas: Array<{ chave: string; nProt?: string; dhEmi?: string; nNF?: string; vNF?: string }> = []
+    const linhas: Array<{ chave: string; nProt?: string; dhEmi?: string; serie?: string; nNF?: string; vNF?: string }> = []
     let cabecalhoEmpresa: CabecalhoEmpresaRelatorio | undefined
     const canceladasPorChave = new Set<string>()
     const canceladasPorProtocolo = new Set<string>()
@@ -1522,12 +1563,13 @@ ipcMain.handle('relatorio:comparativo-xlsx', async (_e, pastaSaida: string) => {
         if (em.nome || em.cnpj) cabecalhoEmpresa = em
       }
 
-      const { chave, nProt, dhEmi, nNF, vNF } = extrairRelatorioDoXml(conteudo)
+      const { chave, nProt, dhEmi, serie, nNF, vNF } = extrairRelatorioDoXml(conteudo)
       if (nNF && vNF) {
         linhas.push({
           chave: chave ?? arquivo.replace(/_nfce\.xml$/i, ''),
           nProt,
           dhEmi,
+          serie,
           nNF,
           vNF,
         })

@@ -59,7 +59,7 @@ export default function Home() {
   }, [loadingUi.type])
 
   return (
-    <div className="flex h-screen select-none bg-[var(--bg-deep)]">
+    <div className="flex h-screen flex-col md:flex-row select-none bg-[var(--bg-deep)]">
       <AppSidebar
         appModule={resolvedModule}
         activeTab={activeTab}

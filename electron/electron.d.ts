@@ -39,6 +39,7 @@ interface NfeProc {
   dhInc: string
   nProt: string
   nfeXml: string
+  serie?: string
   nNF?: string
   vNF?: string
   dhEmi?: string

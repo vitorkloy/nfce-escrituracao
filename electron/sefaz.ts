@@ -57,6 +57,8 @@ export interface NfeProc {
   versao: string
   dhInc: string
   nProt: string
+  /** Série do documento (ide.serie) */
+  serie?: string
   /** Número do documento (nNF) */
   nNF?: string
   /** Valor total do cupom (vNF) */
@@ -482,9 +484,11 @@ function parseDownload(xmlStr: string): ResultadoDownload {
 
       // Extrai campos do XML para o relatório (regex por performance e simplicidade).
       // Campos esperados na estrutura da NFC-e:
+      // - <serie> ... </serie>
       // - <dhEmi> ... </dhEmi>
       // - <nNF> ... </nNF>
       // - <vNF> ... </vNF>
+      const serie = nfeXml.match(/<serie>([^<]+)<\/serie>/)?.[1]?.trim()
       const nNF = nfeXml.match(/<nNF>([^<]+)<\/nNF>/)?.[1]?.trim()
       const vNF = nfeXml.match(/<vNF>([^<]+)<\/vNF>/)?.[1]?.trim()
       const dhEmi = nfeXml.match(/<dhEmi>([^<]+)<\/dhEmi>/)?.[1]?.trim()
@@ -493,6 +497,7 @@ function parseDownload(xmlStr: string): ResultadoDownload {
         versao: String(nfeNode['@_versao'] ?? ''),
         dhInc: String(nfeNode.dhInc ?? ''),
         nProt: String(nfeNode.nProt ?? ''),
+        serie,
         nNF,
         vNF,
         dhEmi,
