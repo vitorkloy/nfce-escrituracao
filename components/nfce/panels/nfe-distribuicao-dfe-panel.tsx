@@ -379,27 +379,19 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
       {modo === 'sincronizacao' && (
         <div className={`p-4 ${SURFACE_CARD_CLASS} space-y-3`}>
           <p className="text-xs text-[var(--text-secondary)]">
-            Loop por <strong>NSU</strong> (até 50 documentos por lote): grava em{' '}
-            <code className="text-[11px]">pasta/CNPJ/ANO/MÊS/chave_procNFe.xml</code> (ou{' '}
-            <code className="text-[11px]">chave_resNFe.xml</code>, <code className="text-[11px]">chave_evento.xml</code>
-            ). Opcionalmente restrinja <strong>o que é gravado</strong> (só notas em que você é emitente ou só em que é
-            destinatário); itens fora do filtro não são salvos, mas o NSU da fila continua avançando. O último NSU fica em{' '}
-            <code className="text-[11px]">.nfe-dist-state.json</code> dentro da pasta do CNPJ — na próxima execução só
-            busca notas novas. Arquivos já existentes não são sobrescritos. A fila da AN pode trazer{' '}
-            <strong>resNFe</strong> (resumo), <strong>procNFe</strong> (NF-e autorizada completa, quando disponível) e{' '}
-            <strong>resEvento</strong> — não é todo lote que inclui XML completo de nota; veja o campo{' '}
-            <code className="text-[10px]">tiposSchema</code> em <code className="text-[10px]">sync-debug.log</code>.
+            Esta opção busca automaticamente novas notas e eventos e salva os arquivos na pasta escolhida, organizados por
+            CNPJ, ano e mês. O sistema continua de onde parou na última sincronização e não sobrescreve arquivos já salvos.
           </p>
 
           <div className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-[var(--text-secondary)] space-y-1.5 max-w-3xl">
             <p>
-              <strong className="text-[var(--text-primary)]">cStat 656 (consumo indevido):</strong> a SEFAZ bloqueia
-              consultas repetidas com NSU incorreto ou em excesso. Use sempre o <strong>ultNSU</strong> devolvido na última
-              resposta e aguarde cerca de <strong>1 hora</strong> antes de insistir.
+              <strong className="text-[var(--text-primary)]">Atenção:</strong> se tentar sincronizar muitas vezes em
+              sequência, a consulta pode ser bloqueada temporariamente. Se isso acontecer, aguarde cerca de{' '}
+              <strong>1 hora</strong> para tentar novamente.
             </p>
             <p>
-              <strong className="text-[var(--text-primary)]">“Reiniciar do NSU zero”:</strong> só em casos raros (novo
-              CNPJ na fila, orientação fiscal). Refazer do zero com histórico grande costuma gerar 656.
+              <strong className="text-[var(--text-primary)]">“Reiniciar do NSU zero”:</strong> use apenas quando for
+              realmente necessário, pois pode aumentar a chance de bloqueio.
             </p>
           </div>
 
