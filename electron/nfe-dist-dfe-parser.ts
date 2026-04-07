@@ -160,6 +160,8 @@ export function extrairAnoMesEmissao(xml: string): { ano: string; mes: string } 
     tagComPrefixo('dhEmi'),
     tagComPrefixo('dEmi'),
     tagComPrefixo('dhRecbto'),
+    tagComPrefixo('dhEvento'),
+    tagComPrefixo('dhRegEvento'),
     tagComPrefixo('dhReg'),
   ].filter(Boolean) as string[]
   for (const raw of candidatos) {

@@ -3,12 +3,14 @@ import path from 'path'
 import type https from 'https'
 import type { ConfigCertNfe } from './nfe'
 import { nfeDistDFeInteresse } from './nfe'
-import { montarDistDfeIntListagemNsu, formatarUltNsu } from './nfe-dist-dfe-build'
+import { montarDistDfeIntListagemNsu, montarDistDfeIntConsultaChave, formatarUltNsu } from './nfe-dist-dfe-build'
 import {
   compararNsu,
   devePersistirDocumentoDistDfe,
   extrairAnoMesEmissao,
   extrairChaveAcesso44,
+  extrairCnpjEmitenteDaChave44,
+  extrairCnpjEmitenteDistDfe,
   extrairXmlRetDistDfeInt,
   inferirTipoArquivoDistDfe,
   maiorNsuDosDocumentos,
@@ -54,9 +56,23 @@ const DEBUG_LOG_FILENAME = 'sync-debug.log'
 const MAX_LOTES_SEGURANCA = 2000
 /** Pausa entre lotes para reduzir 656 (consumo indevido) por requisições muito seguidas. */
 const INTERVALO_ENTRE_LOTES_MS = 900
+/** Máximo de consultas individuais por chave (consChNFe) após o loop NSU. */
+const MAX_CONSULTAS_CHAVE = 100
+const INTERVALO_CONSULTA_CHAVE_MS = 1000
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function anoMesDaChave(chave: string): { ano: string; mes: string } {
+  const d = chave.replace(/\D/g, '')
+  return { ano: `20${d.slice(2, 4)}`, mes: d.slice(4, 6) }
+}
+
+function procNFeJaExiste(pastaRaiz: string, cnpj: string, chave: string): boolean {
+  const { ano, mes } = anoMesDaChave(chave)
+  if (fs.existsSync(path.join(pastaRaiz, cnpj, ano, mes, `${chave}_procNFe.xml`))) return true
+  return fs.existsSync(path.join(pastaRaiz, cnpj, 'sem-data', '00', `${chave}_procNFe.xml`))
 }
 
 function caminhoState(pastaRaiz: string, cnpj14: string): string {
@@ -144,8 +160,122 @@ function salvarDocumento(
 export type ProgressCallback = (p: NfeDistDfeSyncProgresso) => void
 
 /**
+ * Fase 2: para cada chave que só tem evento ou resNFe, faz consulta individual (consChNFe)
+ * para tentar obter o procNFe completo.
+ */
+async function buscarProcNFePorChaves(params: {
+  config: ConfigCertNfe
+  agente: https.Agent
+  pastaRaiz: string
+  cnpj14: string
+  cUFAutor: string
+  chaves: Set<string>
+  chavesComProcNFe: Set<string>
+  onProgress?: ProgressCallback
+}): Promise<{ salvos: number; ignorados: number; falhas: number }> {
+  const { config, agente, pastaRaiz, cnpj14, cUFAutor, chaves, chavesComProcNFe, onProgress } = params
+  const cnpj = cnpj14.replace(/\D/g, '')
+  let salvos = 0
+  let ignorados = 0
+  let falhas = 0
+
+  const pendentes = Array.from(chaves)
+    .filter((ch) => !chavesComProcNFe.has(ch))
+    .filter((ch) => !procNFeJaExiste(pastaRaiz, cnpj, ch))
+    .slice(0, MAX_CONSULTAS_CHAVE)
+
+  if (pendentes.length === 0) return { salvos: 0, ignorados: 0, falhas: 0 }
+
+  escreverDebugSync(pastaRaiz, cnpj14, {
+    evento: 'consulta_chave_inicio',
+    total: pendentes.length,
+  })
+
+  for (let i = 0; i < pendentes.length; i++) {
+    const chave = pendentes[i]
+    if (i > 0) await delay(INTERVALO_CONSULTA_CHAVE_MS)
+
+    try {
+      const distXml = montarDistDfeIntConsultaChave({ cnpj14, cUFAutor, chave })
+      const soapXml = await nfeDistDFeInteresse(config, distXml, agente)
+      const retXml = extrairXmlRetDistDfeInt(soapXml)
+      const ret = parsearRetDistDfeInt(retXml)
+
+      if (ret.cStat === '656') {
+        escreverDebugSync(pastaRaiz, cnpj14, {
+          evento: 'consulta_chave_656',
+          chave,
+          indice: i + 1,
+          total: pendentes.length,
+          xMotivo: ret.xMotivo,
+        })
+        break
+      }
+
+      if (ret.cStat !== '138') {
+        falhas++
+        escreverDebugSync(pastaRaiz, cnpj14, {
+          evento: 'consulta_chave_sem_resultado',
+          chave,
+          cStat: ret.cStat,
+          xMotivo: ret.xMotivo,
+        })
+        continue
+      }
+
+      let salvouProcNFe = false
+      for (const doc of ret.documentos) {
+        const tipo = inferirTipoArquivoDistDfe(doc.schema, doc.xmlUtf8)
+        if (tipo === 'procNFe') {
+          const r = salvarDocumento(pastaRaiz, cnpj14, doc.xmlUtf8, doc.nsu, doc.schema)
+          if (r === 'salvo') salvos++
+          else ignorados++
+          salvouProcNFe = true
+          break
+        }
+      }
+      if (!salvouProcNFe) {
+        for (const doc of ret.documentos) {
+          const tipo = inferirTipoArquivoDistDfe(doc.schema, doc.xmlUtf8)
+          if (tipo === 'resNFe') {
+            const r = salvarDocumento(pastaRaiz, cnpj14, doc.xmlUtf8, doc.nsu, doc.schema)
+            if (r === 'salvo') salvos++
+            else ignorados++
+            break
+          }
+        }
+      }
+
+      onProgress?.({
+        tipo: 'lote',
+        mensagem: `Buscando XML completo por chave… ${i + 1}/${pendentes.length}`,
+        totalSalvos: salvos,
+      })
+    } catch (e) {
+      falhas++
+      escreverDebugSync(pastaRaiz, cnpj14, {
+        evento: 'consulta_chave_erro',
+        chave,
+        motivo: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  escreverDebugSync(pastaRaiz, cnpj14, {
+    evento: 'consulta_chave_fim',
+    salvos,
+    ignorados,
+    falhas,
+    total: pendentes.length,
+  })
+
+  return { salvos, ignorados, falhas }
+}
+
+/**
  * Sincronização contínua: loop NSU até 138 ou ultNSU >= maxNSU; grava em CNPJ/ano/mês/
  * como chave_procNFe.xml | chave_resNFe.xml | chave_evento.xml (evita sobrescrever nota com evento).
+ * Após o loop NSU, consulta individualmente (consChNFe) chaves que não têm procNFe.
  */
 export async function sincronizarDistDfeNfe(params: {
   config: ConfigCertNfe
@@ -167,6 +297,10 @@ export async function sincronizarDistDfeNfe(params: {
   let totalIgnorados = 0
   let totalFiltrados = 0
   let lotes = 0
+  const chavesPendentes = new Set<string>()
+  const chavesComProcNFe = new Set<string>()
+  let fase1Ok = false
+
   escreverDebugSync(pastaRaiz, cnpj14, {
     evento: 'sync_inicio',
     cnpj14: cnpj14.replace(/\D/g, ''),
@@ -255,35 +389,20 @@ export async function sincronizarDistDfeNfe(params: {
 
       // DistDFe AN: 138 = documento(s) localizado(s), 137 = nenhum documento localizado.
       if (ret.cStat === '137') {
-        persistirUltNsu(pastaRaiz, cnpj14, ret.ultNSU)
+        ultNSU = ret.ultNSU
+        persistirUltNsu(pastaRaiz, cnpj14, ultNSU)
         escreverDebugSync(pastaRaiz, cnpj14, {
           evento: 'sync_concluido_137_sem_docs',
           lote: lotes,
-          ultNSU: ret.ultNSU,
+          ultNSU,
           maxNSU: ret.maxNSU,
           totalSalvos,
           totalIgnorados,
           totalFiltrados,
           xMotivo: ret.xMotivo,
         })
-        emit({
-          tipo: 'concluido',
-          ultNSU: ret.ultNSU,
-          maxNSU: ret.maxNSU,
-          cStat: '137',
-          totalSalvos,
-          totalIgnorados,
-          totalFiltrados,
-          mensagem: ret.xMotivo || 'Sem novos documentos.',
-        })
-        return {
-          ok: true,
-          totalSalvos,
-          totalIgnorados,
-          totalFiltrados,
-          ultNSU: ret.ultNSU,
-          lotes,
-        }
+        fase1Ok = true
+        break
       }
 
       if (ret.cStat !== '138') {
@@ -308,10 +427,39 @@ export async function sincronizarDistDfeNfe(params: {
       let loteSalvos = 0
       let loteIgnorados = 0
       let loteFiltrados = 0
+      let filtDiag = { procNFe: 0, resNFe: 0, evento: 0, outro: 0, matchEmKey: 0 }
+      const cnpjLimpo = cnpj14.replace(/\D/g, '')
       for (const doc of ret.documentos) {
-        if (!devePersistirDocumentoDistDfe(doc.xmlUtf8, doc.schema, cnpj14, filtroPapel)) {
+        const persistir = devePersistirDocumentoDistDfe(doc.xmlUtf8, doc.schema, cnpj14, filtroPapel)
+        if (!persistir) {
           loteFiltrados++
           totalFiltrados++
+          if (filtroPapel !== 'todos') {
+            const tipo = inferirTipoArquivoDistDfe(doc.schema, doc.xmlUtf8)
+            const ch = extrairChaveAcesso44(doc.xmlUtf8)
+            const emDaChave = ch ? extrairCnpjEmitenteDaChave44(ch) : undefined
+            if (tipo === 'procNFe') filtDiag.procNFe++
+            else if (tipo === 'resNFe') filtDiag.resNFe++
+            else if (tipo === 'evento') filtDiag.evento++
+            else filtDiag.outro++
+            if (emDaChave === cnpjLimpo) filtDiag.matchEmKey++
+            if (tipo !== 'evento' && emDaChave === cnpjLimpo) {
+              const emExtraido = extrairCnpjEmitenteDistDfe(doc.xmlUtf8)
+              escreverDebugSync(pastaRaiz, cnpj14, {
+                evento: 'doc_filtrado_inesperado',
+                lote: lotes,
+                nsu: doc.nsu,
+                schema: doc.schema,
+                tipo,
+                chave: ch ?? '(sem chave)',
+                emitenteDaChave: emDaChave,
+                emitenteExtraido: emExtraido ?? '(nenhum)',
+                cnpjConsulta: cnpjLimpo,
+                matchEmitente: String(emExtraido === cnpjLimpo),
+                xmlTrecho: doc.xmlUtf8.slice(0, 300),
+              })
+            }
+          }
           continue
         }
         const r = salvarDocumento(pastaRaiz, cnpj14, doc.xmlUtf8, doc.nsu, doc.schema)
@@ -322,6 +470,31 @@ export async function sincronizarDistDfeNfe(params: {
           loteIgnorados++
           totalIgnorados++
         }
+        const tipoSalvo = inferirTipoArquivoDistDfe(doc.schema, doc.xmlUtf8)
+        const chaveSalva = extrairChaveAcesso44(doc.xmlUtf8)
+        if (chaveSalva?.length === 44) {
+          if (tipoSalvo === 'procNFe') {
+            chavesComProcNFe.add(chaveSalva)
+            chavesPendentes.delete(chaveSalva)
+          } else if (!chavesComProcNFe.has(chaveSalva)) {
+            chavesPendentes.add(chaveSalva)
+          }
+        }
+      }
+      if (filtroPapel !== 'todos' && loteFiltrados > 0) {
+        escreverDebugSync(pastaRaiz, cnpj14, {
+          evento: 'filtro_resumo_lote',
+          lote: lotes,
+          filtro: filtroPapel,
+          filtProcNFe: filtDiag.procNFe,
+          filtResNFe: filtDiag.resNFe,
+          filtEvento: filtDiag.evento,
+          filtOutro: filtDiag.outro,
+          filtComChaveEmitMatch: filtDiag.matchEmKey,
+          loteSalvos,
+          loteIgnorados,
+          loteFiltrados,
+        })
       }
 
       const nsuSolicitadoNesteLote = ultNSU
@@ -386,16 +559,8 @@ export async function sincronizarDistDfeNfe(params: {
           totalIgnorados,
           totalFiltrados,
         })
-        emit({
-          tipo: 'concluido',
-          ultNSU,
-          maxNSU: ret.maxNSU,
-          totalSalvos,
-          totalIgnorados,
-          totalFiltrados,
-          mensagem: 'Último NSU alcançou o máximo informado pela SEFAZ.',
-        })
-        return { ok: true, totalSalvos, totalIgnorados, totalFiltrados, ultNSU, lotes }
+        fase1Ok = true
+        break
       }
 
       if (ret.documentos.length === 0) {
@@ -409,17 +574,39 @@ export async function sincronizarDistDfeNfe(params: {
           totalFiltrados,
           xMotivo: ret.xMotivo,
         })
-        emit({
-          tipo: 'concluido',
-          ultNSU,
-          maxNSU: ret.maxNSU,
-          totalSalvos,
-          totalIgnorados,
-          totalFiltrados,
-          mensagem: 'cStat 137 sem docZip — encerrando para evitar loop.',
-        })
-        return { ok: true, totalSalvos, totalIgnorados, totalFiltrados, ultNSU, lotes }
+        fase1Ok = true
+        break
       }
+    }
+
+    // -----------------------------------------------------------------------
+    // Fase 2: buscar procNFe completo por consChNFe para chaves pendentes
+    // -----------------------------------------------------------------------
+    if (fase1Ok && chavesPendentes.size > 0) {
+      const f2 = await buscarProcNFePorChaves({
+        config,
+        agente,
+        pastaRaiz,
+        cnpj14,
+        cUFAutor,
+        chaves: chavesPendentes,
+        chavesComProcNFe,
+        onProgress,
+      })
+      totalSalvos += f2.salvos
+      totalIgnorados += f2.ignorados
+    }
+
+    if (fase1Ok) {
+      emit({
+        tipo: 'concluido',
+        ultNSU,
+        totalSalvos,
+        totalIgnorados,
+        totalFiltrados,
+        mensagem: 'Sincronização concluída.',
+      })
+      return { ok: true, totalSalvos, totalIgnorados, totalFiltrados, ultNSU, lotes }
     }
 
     return {

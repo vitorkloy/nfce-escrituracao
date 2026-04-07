@@ -27,3 +27,24 @@ export function montarDistDfeIntListagemNsu(params: {
     `</distDFeInt>`
   )
 }
+
+export function montarDistDfeIntConsultaChave(params: {
+  cnpj14: string
+  cUFAutor: string
+  chave: string
+}): string {
+  const cnpj = params.cnpj14.replace(/\D/g, '')
+  if (cnpj.length !== 14) throw new Error('CNPJ deve ter 14 dígitos.')
+  const uf = params.cUFAutor.replace(/\D/g, '')
+  if (!/^\d{2}$/.test(uf)) throw new Error('cUFAutor inválido (2 dígitos IBGE).')
+  const chave = params.chave.replace(/\D/g, '')
+  if (chave.length !== 44) throw new Error('Chave de acesso deve ter 44 dígitos.')
+  return (
+    `<distDFeInt xmlns="${NAMESPACE_NFE}" versao="${DIST_DFE_VERSAO}">` +
+    `<tpAmb>${TP_AMB_PRODUCAO}</tpAmb>` +
+    `<cUFAutor>${uf}</cUFAutor>` +
+    `<CNPJ>${cnpj}</CNPJ>` +
+    `<consChNFe><chNFe>${chave}</chNFe></consChNFe>` +
+    `</distDFeInt>`
+  )
+}
