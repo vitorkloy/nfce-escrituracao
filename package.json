@@ -1,6 +1,6 @@
 {
   "name": "nfce-escrituracao",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "Escrituração fiscal — integração com serviços SEFAZ (NF-e, NFC-e) — SEFAZ-SP",
   "author": "Globalpac / Vitor Kloy",
   "main": "dist-electron/main.js",
