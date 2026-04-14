@@ -102,7 +102,14 @@ export default function Home() {
           kind={loadingUi.type}
           current={loadingUi.atual}
           total={loadingUi.total}
-          label={loadingUi.type === 'listagem' ? 'Buscando chaves…' : 'Baixando XMLs…'}
+          label={
+            loadingUi.label ??
+            (loadingUi.type === 'listagem'
+              ? 'Buscando chaves…'
+              : loadingUi.type === 'lote'
+                ? 'Baixando XMLs…'
+                : 'Processando requisição…')
+          }
           onCancel={loadingUi.type === 'listagem' ? () => void cancelarBuscaListagem() : undefined}
           cancelDisabled={loadingUi.type === 'listagem' ? isCancellingListagem : undefined}
         />

@@ -239,6 +239,24 @@ export function extrairCnpjAutorEventoNFe(xml: string): string | undefined {
 }
 
 /**
+ * Sufixo para nome de arquivo de evento (evita um único `chave_evento.xml` por nota).
+ * Prefere `nProt` do retEvento; senão combina tpEvento + nSeqEvento.
+ */
+export function extrairSufixoArquivoEventoNFe(xml: string): string {
+  const idxRet = xml.search(/<(?:[\w.-]+:)?retEvento\b/i)
+  if (idxRet >= 0) {
+    const slice = xml.slice(idxRet, idxRet + 4000)
+    const mProt = slice.match(/<(?:[\w.-]+:)?nProt>(\d{1,25})<\/(?:[\w.-]+:)?nProt>/i)
+    if (mProt?.[1]) return mProt[1].replace(/\D/g, '')
+  }
+  const tp = xml.match(/<(?:[\w.-]+:)?tpEvento>(\d{1,10})<\/(?:[\w.-]+:)?tpEvento>/i)
+  const nseq = xml.match(/<(?:[\w.-]+:)?nSeqEvento>(\d{1,10})<\/(?:[\w.-]+:)?nSeqEvento>/i)
+  if (tp?.[1] && nseq?.[1]) return `${tp[1].replace(/\D/g, '')}_${nseq[1].replace(/\D/g, '')}`
+  if (tp?.[1]) return tp[1].replace(/\D/g, '')
+  return 'evt'
+}
+
+/**
  * Se false, o documento não é gravado em disco; o NSU da fila AN continua sendo consumido normalmente.
  */
 export function devePersistirDocumentoDistDfe(

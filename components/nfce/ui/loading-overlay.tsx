@@ -4,6 +4,7 @@ import { Spinner } from './spinner'
 const DEFAULT_LABEL: Record<OverlayKind, string> = {
   listagem: 'Buscando chaves…',
   lote: 'Baixando XMLs…',
+  request: 'Processando requisição…',
 }
 
 export function LoadingOverlay({

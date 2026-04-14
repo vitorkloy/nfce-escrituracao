@@ -12,6 +12,7 @@ import {
   extrairCnpjEmitenteDaChave44,
   extrairCnpjEmitenteDistDfe,
   extrairXmlRetDistDfeInt,
+  extrairSufixoArquivoEventoNFe,
   inferirTipoArquivoDistDfe,
   maiorNsuDosDocumentos,
   maxNsuValidoParaTerminoSincronia,
@@ -25,6 +26,8 @@ export type { DistDfeFiltroPapel }
 export interface NfeDistDfeSyncStateFile {
   ultNSU: string
   atualizadoEm: string
+  /** Chaves sem procNFe salvo; retomadas na fase consChNFe nas próximas sincronizações. */
+  chavesPendentesProcNFe?: string[]
 }
 
 export interface NfeDistDfeSyncProgresso {
@@ -56,9 +59,15 @@ const DEBUG_LOG_FILENAME = 'sync-debug.log'
 const MAX_LOTES_SEGURANCA = 2000
 /** Pausa entre lotes para reduzir 656 (consumo indevido) por requisições muito seguidas. */
 const INTERVALO_ENTRE_LOTES_MS = 900
-/** Máximo de consultas individuais por chave (consChNFe) após o loop NSU. */
-const MAX_CONSULTAS_CHAVE = 100
-const INTERVALO_CONSULTA_CHAVE_MS = 1000
+/**
+ * Máximo de consultas consChNFe por execução (a AN costuma limitar ~20/hora; pendentes ficam no estado).
+ */
+const MAX_CONSULTAS_CHAVE = 20
+/** ~3 min entre consultas para respeitar o limite de consumo (656) na prática. */
+const INTERVALO_CONSULTA_CHAVE_MS = 185_000
+
+/** cStat em que a nota não virá mais pelo DistDFe por chave — remove da fila persistente. */
+const CSTAT_CONSULTA_CHAVE_DEFINITIVO = new Set(['632', '641', '653'])
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -106,25 +115,49 @@ function escreverDebugSync(
   }
 }
 
-export function carregarUltNsu(pastaRaiz: string, cnpj14: string): string {
+function lerStateArquivo(pastaRaiz: string, cnpj14: string): NfeDistDfeSyncStateFile | null {
   const p = caminhoState(pastaRaiz, cnpj14)
   try {
     const raw = fs.readFileSync(p, 'utf-8')
     const j = JSON.parse(raw) as NfeDistDfeSyncStateFile
-    if (j.ultNSU && /^\d+$/.test(j.ultNSU.replace(/\D/g, ''))) return formatarUltNsu(j.ultNSU)
+    if (j && typeof j === 'object' && typeof j.ultNSU === 'string') return j
   } catch {
     /* sem estado */
   }
+  return null
+}
+
+export function carregarUltNsu(pastaRaiz: string, cnpj14: string): string {
+  const j = lerStateArquivo(pastaRaiz, cnpj14)
+  if (j?.ultNSU && /^\d+$/.test(j.ultNSU.replace(/\D/g, ''))) return formatarUltNsu(j.ultNSU)
   return formatarUltNsu('0')
 }
 
-function persistirUltNsu(pastaRaiz: string, cnpj14: string, ultNSU: string): void {
+function carregarChavesPendentesProcNFe(pastaRaiz: string, cnpj14: string): Set<string> {
+  const j = lerStateArquivo(pastaRaiz, cnpj14)
+  const arr = j?.chavesPendentesProcNFe
+  if (!Array.isArray(arr)) return new Set()
+  const out = new Set<string>()
+  for (const x of arr) {
+    const d = String(x).replace(/\D/g, '')
+    if (d.length === 44) out.add(d)
+  }
+  return out
+}
+
+function persistirEstadoDistDfe(
+  pastaRaiz: string,
+  cnpj14: string,
+  ultNSU: string,
+  chavesPendentesProcNFe: Set<string>
+): void {
   const cnpj = cnpj14.replace(/\D/g, '')
   const dir = path.join(pastaRaiz, cnpj)
   fs.mkdirSync(dir, { recursive: true })
   const payload: NfeDistDfeSyncStateFile = {
     ultNSU: formatarUltNsu(ultNSU),
     atualizadoEm: new Date().toISOString(),
+    chavesPendentesProcNFe: [...chavesPendentesProcNFe].sort(),
   }
   fs.writeFileSync(path.join(dir, STATE_FILENAME), JSON.stringify(payload, null, 2), 'utf-8')
 }
@@ -144,9 +177,15 @@ function salvarDocumento(
   const mes = am?.mes ?? '00'
   const nsuSeguro = (nsu || '0').replace(/\D/g, '') || '0'
   const schCurto = schema.replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 48) || 'doc'
-  const nomeArquivo = chave
-    ? `${chave}_${tipo}.xml`
-    : `NSU_${nsuSeguro}_${tipo}_${schCurto}.xml`
+  let nomeArquivo: string
+  if (chave && tipo === 'evento') {
+    const suf = extrairSufixoArquivoEventoNFe(xml).replace(/[^\dA-Za-z_-]/g, '').slice(0, 40) || 'evt'
+    nomeArquivo = `${chave}_evento_${suf}.xml`
+  } else if (chave) {
+    nomeArquivo = `${chave}_${tipo}.xml`
+  } else {
+    nomeArquivo = `NSU_${nsuSeguro}_${tipo}_${schCurto}.xml`
+  }
 
   const dir = path.join(pastaRaiz, cnpj, ano, mes)
   fs.mkdirSync(dir, { recursive: true })
@@ -171,9 +210,21 @@ async function buscarProcNFePorChaves(params: {
   cUFAutor: string
   chaves: Set<string>
   chavesComProcNFe: Set<string>
+  /** Atualizado ao concluir ou abandonar chaves (656, falhas definitivas da SEFAZ). */
+  chavesPendentesProcNFe: Set<string>
   onProgress?: ProgressCallback
 }): Promise<{ salvos: number; ignorados: number; falhas: number }> {
-  const { config, agente, pastaRaiz, cnpj14, cUFAutor, chaves, chavesComProcNFe, onProgress } = params
+  const {
+    config,
+    agente,
+    pastaRaiz,
+    cnpj14,
+    cUFAutor,
+    chaves,
+    chavesComProcNFe,
+    chavesPendentesProcNFe,
+    onProgress,
+  } = params
   const cnpj = cnpj14.replace(/\D/g, '')
   let salvos = 0
   let ignorados = 0
@@ -182,6 +233,7 @@ async function buscarProcNFePorChaves(params: {
   const pendentes = Array.from(chaves)
     .filter((ch) => !chavesComProcNFe.has(ch))
     .filter((ch) => !procNFeJaExiste(pastaRaiz, cnpj, ch))
+    .sort()
     .slice(0, MAX_CONSULTAS_CHAVE)
 
   if (pendentes.length === 0) return { salvos: 0, ignorados: 0, falhas: 0 }
@@ -220,6 +272,7 @@ async function buscarProcNFePorChaves(params: {
           cStat: ret.cStat,
           xMotivo: ret.xMotivo,
         })
+        if (CSTAT_CONSULTA_CHAVE_DEFINITIVO.has(ret.cStat)) chavesPendentesProcNFe.delete(chave)
         continue
       }
 
@@ -234,7 +287,9 @@ async function buscarProcNFePorChaves(params: {
           break
         }
       }
-      if (!salvouProcNFe) {
+      if (salvouProcNFe) {
+        chavesPendentesProcNFe.delete(chave)
+      } else {
         for (const doc of ret.documentos) {
           const tipo = inferirTipoArquivoDistDfe(doc.schema, doc.xmlUtf8)
           if (tipo === 'resNFe') {
@@ -274,7 +329,7 @@ async function buscarProcNFePorChaves(params: {
 
 /**
  * Sincronização contínua: loop NSU até 138 ou ultNSU >= maxNSU; grava em CNPJ/ano/mês/
- * como chave_procNFe.xml | chave_resNFe.xml | chave_evento.xml (evita sobrescrever nota com evento).
+ * como chave_procNFe.xml | chave_resNFe.xml | chave_evento_<nProt>.xml (vários eventos por nota).
  * Após o loop NSU, consulta individualmente (consChNFe) chaves que não têm procNFe.
  */
 export async function sincronizarDistDfeNfe(params: {
@@ -297,7 +352,11 @@ export async function sincronizarDistDfeNfe(params: {
   let totalIgnorados = 0
   let totalFiltrados = 0
   let lotes = 0
-  const chavesPendentes = new Set<string>()
+  const cnpjDir = cnpj14.replace(/\D/g, '')
+  const chavesPendentes = carregarChavesPendentesProcNFe(pastaRaiz, cnpj14)
+  for (const ch of [...chavesPendentes]) {
+    if (procNFeJaExiste(pastaRaiz, cnpjDir, ch)) chavesPendentes.delete(ch)
+  }
   const chavesComProcNFe = new Set<string>()
   let fase1Ok = false
 
@@ -308,6 +367,7 @@ export async function sincronizarDistDfeNfe(params: {
     reiniciarNsu,
     filtroPapel,
     ultNSUInicial: ultNSU,
+    chavesPendentesArquivo: chavesPendentes.size,
   })
 
   const emit = (p: NfeDistDfeSyncProgresso) => {
@@ -365,8 +425,10 @@ export async function sincronizarDistDfeNfe(params: {
         const candidato656 = formatarUltNsu(ret.ultNSU.replace(/\D/g, ''))
         let ultApos656 = nsuSolicitado656
         if (candidato656 && compararNsu(candidato656, nsuSolicitado656) >= 0) {
-          persistirUltNsu(pastaRaiz, cnpj14, candidato656)
+          persistirEstadoDistDfe(pastaRaiz, cnpj14, candidato656, chavesPendentes)
           ultApos656 = candidato656
+        } else {
+          persistirEstadoDistDfe(pastaRaiz, cnpj14, nsuSolicitado656, chavesPendentes)
         }
         emit({ tipo: 'erro', cStat: '656', mensagem: detalhe })
         escreverDebugSync(pastaRaiz, cnpj14, {
@@ -390,7 +452,7 @@ export async function sincronizarDistDfeNfe(params: {
       // DistDFe AN: 138 = documento(s) localizado(s), 137 = nenhum documento localizado.
       if (ret.cStat === '137') {
         ultNSU = ret.ultNSU
-        persistirUltNsu(pastaRaiz, cnpj14, ultNSU)
+        persistirEstadoDistDfe(pastaRaiz, cnpj14, ultNSU, chavesPendentes)
         escreverDebugSync(pastaRaiz, cnpj14, {
           evento: 'sync_concluido_137_sem_docs',
           lote: lotes,
@@ -533,7 +595,7 @@ export async function sincronizarDistDfeNfe(params: {
       }
 
       ultNSU = proximoUlt
-      persistirUltNsu(pastaRaiz, cnpj14, ultNSU)
+      persistirEstadoDistDfe(pastaRaiz, cnpj14, ultNSU, chavesPendentes)
 
       emit({
         tipo: 'lote',
@@ -591,13 +653,16 @@ export async function sincronizarDistDfeNfe(params: {
         cUFAutor,
         chaves: chavesPendentes,
         chavesComProcNFe,
+        chavesPendentesProcNFe: chavesPendentes,
         onProgress,
       })
       totalSalvos += f2.salvos
       totalIgnorados += f2.ignorados
+      persistirEstadoDistDfe(pastaRaiz, cnpj14, ultNSU, chavesPendentes)
     }
 
     if (fase1Ok) {
+      persistirEstadoDistDfe(pastaRaiz, cnpj14, ultNSU, chavesPendentes)
       emit({
         tipo: 'concluido',
         ultNSU,
@@ -609,6 +674,7 @@ export async function sincronizarDistDfeNfe(params: {
       return { ok: true, totalSalvos, totalIgnorados, totalFiltrados, ultNSU, lotes }
     }
 
+    persistirEstadoDistDfe(pastaRaiz, cnpj14, ultNSU, chavesPendentes)
     return {
       ok: false,
       totalSalvos,
@@ -620,6 +686,11 @@ export async function sincronizarDistDfeNfe(params: {
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
+    try {
+      persistirEstadoDistDfe(pastaRaiz, cnpj14, ultNSU, chavesPendentes)
+    } catch {
+      /* não falhar por I/O de estado */
+    }
     escreverDebugSync(pastaRaiz, cnpj14, {
       evento: 'erro_excecao_sync',
       ultNSU,

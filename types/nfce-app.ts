@@ -50,12 +50,13 @@ export interface ToastMessage {
   msg: string
 }
 
-export type OverlayKind = 'listagem' | 'lote'
+export type OverlayKind = 'listagem' | 'lote' | 'request'
 
 export interface LoadingUiState {
   type: OverlayKind | null
   atual?: number
   total?: number
+  label?: string
 }
 
 /** Resposta tipada do IPC de download em lote (alinhada ao retorno do main). */

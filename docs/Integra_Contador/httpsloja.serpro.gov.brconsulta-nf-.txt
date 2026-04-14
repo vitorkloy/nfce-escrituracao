@@ -1,0 +1,44 @@
+https://loja.serpro.gov.br/consulta-nf-e/product/consultanfe
+
+Consulta Nota Fiscal Eletrônica
+Acesso a informações atualizadas da nota fiscal eletrônica
+
+-- 
+
+Visão Geral
+Consulta Nota Fiscal Eletrônica
+Ao integrar sua aplicação à Consulta NF-e, você dispõe de informações estratégicas da NFe Modelo 55 obtidas diretamente da base do SPED, garantindo maior assertividade à tomada de decisões e minimizando riscos de negócios.
+
+A Nota Fiscal Eletrônica (NF-e) é um documento de existência exclusivamente digital, emitido e armazenado eletronicamente. A chave da NFe é um código que identifica de forma única cada nota fiscal eletrônica. A funcionalidade Push NF-e é uma solução que permite o monitoramento proativo de eventos de notas fiscais na base NF-e.
+
+O produto alerta a ocorrência de mudança na situação da nota fiscal informada, acelerando processos e reduzindo o custo das operações financeiras com informações de situação disponíveis online.
+
+--
+
+Características
+Vantagens e benefícios
+Melhora a qualidade da avaliação de crédito
+
+Minimiza o risco de fraudes
+
+Acesso a informações diretamente do Governo, sem intermediários
+
+Informações sempre atualizadas
+
+Segurança e confiabilidade da informação
+
+Possibilita automatizar consultas e verificação das informações
+
+Contratação 100% online e sem taxa de instalação
+
+Modelo de cobrança pós-pago
+
+Liberação imediata de acesso desde que o o cliente tenha um certificado digital e-CNPJ
+
+Quanto maior o consumo, menor o custo unitário
+
+Alta disponibilidade
+
+Cancelamento a qualquer momento, sem taxas ou multas
+
+--

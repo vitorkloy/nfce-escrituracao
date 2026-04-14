@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { CertificateUiState, ToastVariant } from '@/types/nfce-app'
+import type { CertificateUiState, LoadingUiState, ToastVariant } from '@/types/nfce-app'
 import { useIsElectron } from '@/hooks/useIsElectron'
 import { BUTTON_PRIMARY_CLASS, INPUT_BASE_CLASS, SURFACE_CARD_CLASS } from '@/components/nfce/ui/classes'
 import { Spinner } from '@/components/nfce/ui/spinner'
@@ -10,6 +10,7 @@ import { formatarUltNsu } from '@/lib/nfe-dist-dfe-xml'
 type NfeDistribuicaoDfePanelProps = {
   certificateState: CertificateUiState
   showToast: (variant: ToastVariant, message: string) => void
+  onLoadingStateChange: (state: LoadingUiState) => void
 }
 
 type ModoPainel = 'xml-livre' | 'sincronizacao' | 'arquivos-salvos'
@@ -63,7 +64,11 @@ function formatarProgressoSync(p: {
   return msgErro
 }
 
-export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDistribuicaoDfePanelProps) {
+export function NfeDistribuicaoDfePanel({
+  certificateState,
+  showToast,
+  onLoadingStateChange,
+}: NfeDistribuicaoDfePanelProps) {
   const { isElectron } = useIsElectron()
   const [modo, setModo] = useState<ModoPainel>('sincronizacao')
   const [xml, setXml] = useState('')
@@ -186,6 +191,8 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
     setIsLoading(true)
     setResposta(null)
     setResumoDist(null)
+    onLoadingStateChange({ type: 'request', label: 'Consultando Distribuição DFe…' })
+    if (window.electron?.app) window.electron.app.setBusy(true)
     try {
       const resp = await window.electron.nfe.distribuicaoDfe(certificateState as never, texto)
       if (!resp.ok) {
@@ -211,6 +218,8 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
       showToast('erro', err instanceof Error ? err.message : 'Erro ao chamar Distribuição DFe.')
     } finally {
       setIsLoading(false)
+      onLoadingStateChange({ type: null })
+      if (window.electron?.app) window.electron.app.setBusy(false)
     }
   }
 
@@ -266,6 +275,7 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
 
     setLogSync([])
     setSyncRodando(true)
+    onLoadingStateChange({ type: 'request', label: 'Sincronizando documentos da SEFAZ…' })
     window.electron.app.setBusy(true)
     try {
       const r = await window.electron.nfe.syncDistDfe(certificateState as never, {
@@ -298,6 +308,7 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
       showToast('erro', err instanceof Error ? err.message : 'Erro na sincronização.')
     } finally {
       window.electron.app.setBusy(false)
+      onLoadingStateChange({ type: null })
       setSyncRodando(false)
     }
   }
@@ -307,27 +318,41 @@ export function NfeDistribuicaoDfePanel({ certificateState, showToast }: NfeDist
       showToast('erro', 'Pasta raiz e CNPJ são obrigatórios.')
       return
     }
-    const r = await window.electron.nfe.listarXmlsSalvos(pastaRaiz.trim(), cnpj.replace(/\D/g, ''), {
-      ano: filtroAno.trim() || undefined,
-      mes: filtroMes.trim() || undefined,
-    })
-    if (!r.ok) {
-      showToast('erro', r.xMotivo ?? 'Falha ao listar arquivos.')
-      return
+    onLoadingStateChange({ type: 'request', label: 'Consultando XMLs já salvos…' })
+    if (window.electron?.app) window.electron.app.setBusy(true)
+    try {
+      const r = await window.electron.nfe.listarXmlsSalvos(pastaRaiz.trim(), cnpj.replace(/\D/g, ''), {
+        ano: filtroAno.trim() || undefined,
+        mes: filtroMes.trim() || undefined,
+      })
+      if (!r.ok) {
+        showToast('erro', r.xMotivo ?? 'Falha ao listar arquivos.')
+        return
+      }
+      setListaArquivos(r.arquivos ?? [])
+      showToast('info', `${r.total ?? 0} arquivo(s) encontrado(s).`)
+    } finally {
+      onLoadingStateChange({ type: null })
+      if (window.electron?.app) window.electron.app.setBusy(false)
     }
-    setListaArquivos(r.arquivos ?? [])
-    showToast('info', `${r.total ?? 0} arquivo(s) encontrado(s).`)
   }
 
   async function abrirPreview(caminho: string, chave: string) {
     if (!isElectron) return
-    const r = await window.electron.fs.lerArquivoUtf8(caminho)
-    if (!r.ok || r.conteudo === undefined) {
-      showToast('erro', r.xMotivo ?? 'Não foi possível ler o arquivo.')
-      return
+    onLoadingStateChange({ type: 'request', label: 'Abrindo prévia do XML…' })
+    if (window.electron?.app) window.electron.app.setBusy(true)
+    try {
+      const r = await window.electron.fs.lerArquivoUtf8(caminho)
+      if (!r.ok || r.conteudo === undefined) {
+        showToast('erro', r.xMotivo ?? 'Não foi possível ler o arquivo.')
+        return
+      }
+      setPreviewTitulo(chave)
+      setPreviewXml(r.conteudo)
+    } finally {
+      onLoadingStateChange({ type: null })
+      if (window.electron?.app) window.electron.app.setBusy(false)
     }
-    setPreviewTitulo(chave)
-    setPreviewXml(r.conteudo)
   }
 
   const btnModo = (id: ModoPainel, label: string) => (

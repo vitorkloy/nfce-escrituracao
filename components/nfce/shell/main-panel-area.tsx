@@ -77,12 +77,20 @@ export function MainPanelArea({
         )}
         {activeTab === 'nfe-dist-dfe' && appModule === 'nfe' && (
           <div className="h-full flex flex-col overflow-hidden">
-            <NfeDistribuicaoDfePanel certificateState={certificateState} showToast={showToast} />
+            <NfeDistribuicaoDfePanel
+              certificateState={certificateState}
+              showToast={showToast}
+              onLoadingStateChange={onLoadingStateChange}
+            />
           </div>
         )}
         {activeTab === 'nfe-recepcao-evento' && appModule === 'nfe' && (
           <div className="h-full flex flex-col overflow-hidden">
-            <NfeRecepcaoEventoPanel certificateState={certificateState} showToast={showToast} />
+            <NfeRecepcaoEventoPanel
+              certificateState={certificateState}
+              showToast={showToast}
+              onLoadingStateChange={onLoadingStateChange}
+            />
           </div>
         )}
       </div>
