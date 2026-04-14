@@ -16,11 +16,15 @@ export function RelatorioPanel({ appModule, showToast }: RelatorioPanelProps) {
   const [isCarregandoXmls, setIsCarregandoXmls] = useState(false)
   const [xmlArquivos, setXmlArquivos] = useState<string[]>([])
   const [xmlCancelados, setXmlCancelados] = useState<string[]>([])
+  const [qtdXmlFormatoLegado, setQtdXmlFormatoLegado] = useState(0)
+  const [qtdXmlFormatoChave44, setQtdXmlFormatoChave44] = useState(0)
 
   async function carregarPreviewXmls(pastaAlvo: string) {
     if (!isElectron || !pastaAlvo) {
       setXmlArquivos([])
       setXmlCancelados([])
+      setQtdXmlFormatoLegado(0)
+      setQtdXmlFormatoChave44(0)
       return
     }
     setIsCarregandoXmls(true)
@@ -29,14 +33,20 @@ export function RelatorioPanel({ appModule, showToast }: RelatorioPanelProps) {
       if (!resp.ok) {
         setXmlArquivos([])
         setXmlCancelados([])
+        setQtdXmlFormatoLegado(0)
+        setQtdXmlFormatoChave44(0)
         showToast('erro', resp.xMotivo ?? 'Falha ao listar XMLs.')
         return
       }
       setXmlArquivos(resp.arquivos ?? [])
       setXmlCancelados(resp.cancelados ?? [])
+      setQtdXmlFormatoLegado(resp.totalFormatoLegado ?? 0)
+      setQtdXmlFormatoChave44(resp.totalFormatoChave44 ?? 0)
     } catch (err) {
       setXmlArquivos([])
       setXmlCancelados([])
+      setQtdXmlFormatoLegado(0)
+      setQtdXmlFormatoChave44(0)
       showToast('erro', err instanceof Error ? err.message : 'Erro ao listar XMLs.')
     } finally {
       setIsCarregandoXmls(false)
@@ -104,8 +114,16 @@ export function RelatorioPanel({ appModule, showToast }: RelatorioPanelProps) {
         </h2>
 
         <p className="text-sm text-[var(--text-secondary)] mb-4">
-          Gera um comparativo a partir dos arquivos <span className="font-mono">*_nfce.xml</span> salvos na pasta.
+          Gera um comparativo a partir dos arquivos <span className="font-mono">*_nfce.xml</span> ou{' '}
+          <span className="font-mono">[chave44].xml</span> salvos na pasta.
         </p>
+        {qtdXmlFormatoChave44 > 0 && (
+          <p className="text-xs text-[var(--text-secondary)] mb-3">
+            Detectado formato do cliente: <span className="font-mono">{qtdXmlFormatoChave44}</span> arquivo(s){' '}
+            <span className="font-mono">[chave44].xml</span> e <span className="font-mono">{qtdXmlFormatoLegado}</span>{' '}
+            arquivo(s) <span className="font-mono">*_nfce.xml</span>.
+          </p>
+        )}
 
         <div className="flex gap-3">
           <button
@@ -150,7 +168,7 @@ export function RelatorioPanel({ appModule, showToast }: RelatorioPanelProps) {
           {isCarregandoXmls ? (
             <p className="text-xs text-[var(--text-muted)]">Carregando arquivos…</p>
           ) : xmlArquivos.length === 0 ? (
-            <p className="text-xs text-[var(--text-muted)]">Nenhum arquivo *_nfce.xml encontrado.</p>
+            <p className="text-xs text-[var(--text-muted)]">Nenhum arquivo de NFC-e encontrado.</p>
           ) : (
             <div className="max-h-32 overflow-auto rounded border border-[var(--border)] bg-[var(--bg-surface)]">
               {xmlArquivos.slice(0, 10).map((arquivo) => (

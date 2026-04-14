@@ -234,6 +234,8 @@ declare global {
           ok: boolean
           total: number
           arquivos: string[]
+          totalFormatoLegado: number
+          totalFormatoChave44: number
           totalCancelados: number
           cancelados: string[]
           xMotivo?: string

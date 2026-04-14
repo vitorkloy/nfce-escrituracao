@@ -1528,13 +1528,27 @@ function extrairRelatorioDoXml(xmlStr: string): {
   return { chave, nProt, dhEmi, serie, nNF, vNF }
 }
 
+function isXmlNfceRelatorio(nomeArquivo: string): boolean {
+  const nome = String(nomeArquivo ?? '')
+  if (/_nfce\.xml$/i.test(nome)) return true
+  return /^\d{44}\.xml$/i.test(nome)
+}
+
+function isXmlNfceFormatoLegado(nomeArquivo: string): boolean {
+  return /_nfce\.xml$/i.test(String(nomeArquivo ?? ''))
+}
+
+function isXmlNfceFormatoChave44(nomeArquivo: string): boolean {
+  return /^\d{44}\.xml$/i.test(String(nomeArquivo ?? ''))
+}
+
 ipcMain.handle('relatorio:comparativo-xlsx', async (_e, pastaSaida: string) => {
   try {
     if (!pastaSaida) throw new Error('Pasta de destino não informada.')
     if (!fs.existsSync(pastaSaida)) throw new Error('Pasta de destino não encontrada.')
 
     const entries = fs.readdirSync(pastaSaida)
-    const nfceArquivos = entries.filter((f) => /_nfce\.xml$/i.test(f))
+    const nfceArquivos = entries.filter(isXmlNfceRelatorio)
     const eventoArquivos = entries.filter((f) => /_evento\.xml$/i.test(f))
 
     const linhas: Array<{ chave: string; nProt?: string; dhEmi?: string; serie?: string; nNF?: string; vNF?: string }> = []
@@ -1577,7 +1591,7 @@ ipcMain.handle('relatorio:comparativo-xlsx', async (_e, pastaSaida: string) => {
       const { chave, nProt, dhEmi, serie, nNF, vNF } = extrairRelatorioDoXml(conteudo)
       if (nNF && vNF) {
         linhas.push({
-          chave: chave ?? arquivo.replace(/_nfce\.xml$/i, ''),
+          chave: chave ?? arquivo.replace(/(?:_nfce)?\.xml$/i, ''),
           nProt,
           dhEmi,
           serie,
@@ -1628,10 +1642,10 @@ ipcMain.handle('relatorio:listar-xmls', async (_e, pastaSaida: string) => {
     if (!fs.existsSync(pastaSaida)) throw new Error('Pasta de destino não encontrada.')
 
     const entries = fs.readdirSync(pastaSaida)
-    const xmlArquivos = entries
-      .filter((f) => /_nfce\.xml$/i.test(f))
-      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    const xmlArquivos = entries.filter(isXmlNfceRelatorio).sort((a, b) => a.localeCompare(b, 'pt-BR'))
     const eventoArquivos = entries.filter((f) => /_evento\.xml$/i.test(f))
+    const totalFormatoLegado = xmlArquivos.filter(isXmlNfceFormatoLegado).length
+    const totalFormatoChave44 = xmlArquivos.filter(isXmlNfceFormatoChave44).length
 
     const canceladasPorChave = new Set<string>()
     const canceladasPorProtocolo = new Set<string>()
@@ -1669,6 +1683,8 @@ ipcMain.handle('relatorio:listar-xmls', async (_e, pastaSaida: string) => {
       ok: true,
       total: xmlArquivos.length,
       arquivos: xmlArquivos,
+      totalFormatoLegado,
+      totalFormatoChave44,
       totalCancelados: cancelados.length,
       cancelados,
     }
@@ -1677,6 +1693,8 @@ ipcMain.handle('relatorio:listar-xmls', async (_e, pastaSaida: string) => {
       ok: false,
       total: 0,
       arquivos: [] as string[],
+      totalFormatoLegado: 0,
+      totalFormatoChave44: 0,
       totalCancelados: 0,
       cancelados: [] as string[],
       xMotivo: mensagemErro(err),
