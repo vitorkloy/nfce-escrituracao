@@ -10,7 +10,7 @@ import { useElectronAppMeta } from '@/hooks/use-electron-app-meta'
 import { useAutoUpdater } from '@/hooks/use-auto-updater'
 import { useToastStack } from '@/hooks/use-toast-stack'
 import { useIsElectron } from '@/hooks/useIsElectron'
-import type { AppTab, LoadingUiState } from '@/types/nfce-app'
+import type { AppModule, AppTab, LoadingUiState } from '@/types/nfce-app'
 
 export default function Home() {
   const { isElectron } = useIsElectron()
