@@ -114,12 +114,12 @@ export function RelatorioPanel({ appModule, showToast }: RelatorioPanelProps) {
         </h2>
 
         <p className="text-sm text-[var(--text-secondary)] mb-4">
-          Gera um comparativo a partir dos arquivos <span className="font-mono">*_nfce.xml</span> ou{' '}
-          <span className="font-mono">[chave44].xml</span> salvos na pasta.
+          Gera um comparativo a partir de quaisquer arquivos <span className="font-mono">.xml</span> salvos na
+          pasta.
         </p>
-        {qtdXmlFormatoChave44 > 0 && (
+        {(qtdXmlFormatoChave44 > 0 || qtdXmlFormatoLegado > 0) && (
           <p className="text-xs text-[var(--text-secondary)] mb-3">
-            Detectado formato do cliente: <span className="font-mono">{qtdXmlFormatoChave44}</span> arquivo(s){' '}
+            Formatos identificados na pasta: <span className="font-mono">{qtdXmlFormatoChave44}</span> arquivo(s){' '}
             <span className="font-mono">[chave44].xml</span> e <span className="font-mono">{qtdXmlFormatoLegado}</span>{' '}
             arquivo(s) <span className="font-mono">*_nfce.xml</span>.
           </p>
@@ -168,7 +168,7 @@ export function RelatorioPanel({ appModule, showToast }: RelatorioPanelProps) {
           {isCarregandoXmls ? (
             <p className="text-xs text-[var(--text-muted)]">Carregando arquivos…</p>
           ) : xmlArquivos.length === 0 ? (
-            <p className="text-xs text-[var(--text-muted)]">Nenhum arquivo de NFC-e encontrado.</p>
+            <p className="text-xs text-[var(--text-muted)]">Nenhum arquivo XML encontrado.</p>
           ) : (
             <div className="max-h-32 overflow-auto rounded border border-[var(--border)] bg-[var(--bg-surface)]">
               {xmlArquivos.slice(0, 10).map((arquivo) => (

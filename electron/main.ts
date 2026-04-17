@@ -1529,9 +1529,7 @@ function extrairRelatorioDoXml(xmlStr: string): {
 }
 
 function isXmlNfceRelatorio(nomeArquivo: string): boolean {
-  const nome = String(nomeArquivo ?? '')
-  if (/_nfce\.xml$/i.test(nome)) return true
-  return /^\d{44}\.xml$/i.test(nome)
+  return /\.xml$/i.test(String(nomeArquivo ?? ''))
 }
 
 function isXmlNfceFormatoLegado(nomeArquivo: string): boolean {
@@ -1591,7 +1589,7 @@ ipcMain.handle('relatorio:comparativo-xlsx', async (_e, pastaSaida: string) => {
       const { chave, nProt, dhEmi, serie, nNF, vNF } = extrairRelatorioDoXml(conteudo)
       if (nNF && vNF) {
         linhas.push({
-          chave: chave ?? arquivo.replace(/(?:_nfce)?\.xml$/i, ''),
+          chave: chave ?? arquivo.replace(/\.xml$/i, ''),
           nProt,
           dhEmi,
           serie,
