@@ -36,7 +36,7 @@ export function MainPanelArea({
     <main className="flex-1 min-h-0 overflow-hidden flex flex-col bg-[var(--bg-base)]">
       <div className="drag-region h-8 shrink-0 bg-[var(--bg-base)] hidden md:block" />
       <div className="flex-1 overflow-hidden">
-        {activeTab === 'config' && (
+        {activeTab === 'config' && appModule !== 'relatorio' && (
           <div className="h-full overflow-auto">
             <ConfigPanel
               certificateState={certificateState}
@@ -45,7 +45,7 @@ export function MainPanelArea({
             />
           </div>
         )}
-        {activeTab === 'listagem' && (
+        {activeTab === 'listagem' && appModule === 'nfce' && (
           <div className="h-full flex flex-col overflow-hidden">
             <KeyListPanel
               appModule={appModule}
@@ -55,7 +55,7 @@ export function MainPanelArea({
             />
           </div>
         )}
-        {activeTab === 'download' && (
+        {activeTab === 'download' && appModule === 'nfce' && (
           <div className="h-full flex flex-col overflow-hidden">
             <DownloadXmlPanel
               appModule={appModule}
@@ -67,7 +67,7 @@ export function MainPanelArea({
         )}
         {activeTab === 'relatorio' && (
           <div className="h-full flex flex-col overflow-hidden">
-            <RelatorioPanel appModule={appModule} showToast={showToast} />
+            <RelatorioPanel showToast={showToast} />
           </div>
         )}
         {activeTab === 'manual' && (

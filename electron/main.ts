@@ -37,7 +37,7 @@ const execFileAsync = promisify(execFile)
 // ---------------------------------------------------------------------------
 
 type ThemePreference = 'light' | 'dark' | 'system'
-type AppModule = 'nfce' | 'nfe'
+type AppModule = 'nfce' | 'nfe' | 'relatorio'
 
 interface CertStorePayload {
   pfxPath: string
@@ -287,7 +287,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: windowBackgroundHex(),
-    title: 'Escrituração Fiscal',
+    title: 'Escrituração Fiscal - eFis',
     titleBarStyle: 'hiddenInset',
     ...(icon ? { icon } : {}),
     webPreferences: {
@@ -365,7 +365,10 @@ app.on('window-all-closed', () => {
 
 // Versão do app (package.json) — instalador e electron-builder usam o mesmo campo
 ipcMain.handle('app:get-version', () => app.getVersion())
-ipcMain.handle('app:set-modulo', (_e, modulo: AppModule) => modulo === 'nfce' || modulo === 'nfe')
+ipcMain.handle(
+  'app:set-modulo',
+  (_e, modulo: AppModule) => modulo === 'nfce' || modulo === 'nfe' || modulo === 'relatorio'
+)
 ipcMain.on('app:set-busy', (_e, busy: boolean) => {
   appEstaOcupada = Boolean(busy)
 })

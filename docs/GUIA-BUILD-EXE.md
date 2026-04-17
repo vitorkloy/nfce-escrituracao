@@ -31,7 +31,7 @@
 4. **Onde está o .exe**  
    Pasta **`release/`**, arquivo no formato:
    ```text
-   Escrituração Fiscal Setup X.Y.Z.exe
+   Escrituração Fiscal - eFis Setup X.Y.Z.exe
    ```
 
 ## Comandos úteis

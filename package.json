@@ -1,7 +1,7 @@
 {
-  "name": "nfce-escrituracao",
+  "name": "efis",
   "version": "2.0.9",
-  "description": "Escrituração fiscal — integração com serviços SEFAZ (NF-e, NFC-e) — SEFAZ-SP",
+  "description": "Escrituração Fiscal - eFis — integração com serviços SEFAZ (NF-e, NFC-e e outros módulos) — SEFAZ-SP",
   "author": "Globalpac / Vitor Kloy",
   "main": "dist-electron/main.js",
   "repository": {

@@ -1,6 +1,6 @@
-# ⬡ Escrituração Fiscal — SEFAZ-SP
+# ⬡ Escrituração Fiscal - eFis
 
-> **Escrituração Fiscal** — cliente desktop para serviços da SEFAZ, incluindo **Serviços de Apoio à Escrituração da NFC-e** (Nota Técnica 2026, SAE-NFC-e v1.0.0) e módulos de NF-e.  
+> **Escrituração Fiscal - eFis** — cliente desktop para serviços da SEFAZ, incluindo **Serviços de Apoio à Escrituração da NFC-e** (Nota Técnica 2026, SAE-NFC-e v1.0.0), módulos de NF-e e outros serviços.  
 > Construído com **Electron + Next.js + TypeScript**.
 
 ---

@@ -12,12 +12,6 @@ export function useElectronAppMeta(isElectron: boolean) {
     window.electron.app.getVersion().then(setAppVersion).catch(() => setAppVersion(''))
   }, [isElectron])
 
-  /** Módulo não vem do disco — toda sessão inicia com padrão NFC-e. */
-  useEffect(() => {
-    if (!isElectron) return
-    setAppModule('nfce')
-  }, [isElectron])
-
   const persistModuleSelection = useCallback(async (modulo: AppModule): Promise<boolean> => {
     if (!isElectron) return false
     const ok = await window.electron.app.setModulo(modulo)

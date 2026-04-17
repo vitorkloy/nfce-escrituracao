@@ -6,7 +6,7 @@ O campo **`version`** (semver: `MAIOR.MENOR.PATCH`) é a referência para:
 
 | Onde entra | Como |
 |------------|------|
-| **Nome do instalador** | `electron-builder` usa `productName` → `Escrituração Fiscal Setup X.Y.Z.exe` |
+| **Nome do instalador** | `electron-builder` usa `productName` → `Escrituração Fiscal - eFis Setup X.Y.Z.exe` |
 | **Metadados do app** | Electron `app.getVersion()` no processo principal |
 | **Interface** | Rodapé da sidebar mostra **App vX.Y.Z** (via IPC `app:get-version`) |
 | **Git** | Tag opcional `vX.Y.Z` alinhada à mesma versão |

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { AppSidebar, MainPanelArea } from '@/components/nfce/shell'
+import { AppSidebar, MainPanelArea, ModulePickerScreen } from '@/components/nfce/shell'
 import { LoadingOverlay } from '@/components/nfce/ui/loading-overlay'
 import { UpdateAvailableModal } from '@/components/nfce/ui/update-available-modal'
 import { ToastStack } from '@/components/nfce/ui/toast-stack'
@@ -10,7 +10,7 @@ import { useElectronAppMeta } from '@/hooks/use-electron-app-meta'
 import { useAutoUpdater } from '@/hooks/use-auto-updater'
 import { useToastStack } from '@/hooks/use-toast-stack'
 import { useIsElectron } from '@/hooks/useIsElectron'
-import type { AppModule, AppTab, LoadingUiState } from '@/types/nfce-app'
+import type { AppTab, LoadingUiState } from '@/types/nfce-app'
 
 export default function Home() {
   const { isElectron } = useIsElectron()
@@ -22,8 +22,6 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<AppTab>('config')
   const [loadingUi, setLoadingUi] = useState<LoadingUiState>({ type: null })
   const [isCancellingListagem, setIsCancellingListagem] = useState(false)
-
-  const resolvedModule: AppModule = appModule ?? 'nfce'
 
   const certificateReady =
     (certificateState.origemStore && Boolean(certificateState.thumbprint)) ||
@@ -41,7 +39,7 @@ export default function Home() {
         showToast('erro', 'Não foi possível salvar o módulo selecionado.')
         return
       }
-      setActiveTab('config')
+      setActiveTab(modulo === 'relatorio' ? 'relatorio' : 'config')
     },
     [isElectron, persistModuleSelection, showToast],
   )
@@ -61,10 +59,30 @@ export default function Home() {
     if (loadingUi.type !== 'listagem') setIsCancellingListagem(false)
   }, [loadingUi.type])
 
+  if (!appModule) {
+    return (
+      <div className="h-screen w-screen select-none bg-[var(--bg-deep)]">
+        <ModulePickerScreen onSelectModule={(m) => void escolherModulo(m)} />
+        <ToastStack toasts={toasts} onDismiss={dismissToast} />
+        <UpdateAvailableModal
+          open={autoUpdate.updateModalOpen}
+          phase={autoUpdate.updatePhase}
+          currentVersion={autoUpdate.currentAppVersion}
+          remoteVersion={autoUpdate.updateRemoteVersion}
+          percent={autoUpdate.updatePercent}
+          errorMessage={autoUpdate.updateErrorMessage}
+          onDismiss={autoUpdate.dismissUpdateModal}
+          onDownload={() => void autoUpdate.startUpdateDownload()}
+          onInstall={() => void autoUpdate.installUpdate()}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen flex-col md:flex-row select-none bg-[var(--bg-deep)]">
       <AppSidebar
-        appModule={resolvedModule}
+        appModule={appModule}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         certificateState={certificateState}
@@ -76,7 +94,7 @@ export default function Home() {
 
       <MainPanelArea
         activeTab={activeTab}
-        appModule={resolvedModule}
+        appModule={appModule}
         certificateState={certificateState}
         onCertificateChange={setCertificateState}
         showToast={showToast}

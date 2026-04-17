@@ -71,7 +71,7 @@ function ModuleToggle({
   return (
     <div className="mb-3">
       <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-1.5">Módulo</p>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <button
           type="button"
           onClick={() => onSelectModule('nfce')}
@@ -95,6 +95,18 @@ function ModuleToggle({
           ].join(' ')}
         >
           NF-e
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelectModule('relatorio')}
+          className={[
+            'py-1.5 rounded text-xs font-semibold no-drag border',
+            appModule === 'relatorio'
+              ? 'border-[var(--teal-dim)] bg-[var(--teal-glow)] text-[var(--teal)]'
+              : 'border-[var(--border)] bg-[var(--bg-raised)] text-[var(--text-secondary)]',
+          ].join(' ')}
+        >
+          Relatório
         </button>
       </div>
     </div>
@@ -135,7 +147,7 @@ function SidebarFooter({
         </p>
       )}
       <p className="text-xs text-[var(--text-muted)]">
-        {appModule === 'nfe' ? 'SAE-NF-e' : 'SAE-NFC-e'} v2.0.0
+        {appModule === 'nfe' ? 'SAE-NF-e' : appModule === 'relatorio' ? 'SAE-Relatório' : 'SAE-NFC-e'} v2.0.0
       </p>
       <p className="text-xs text-[var(--text-muted)]">SEFAZ-SP · NT 2026</p>
     </div>
@@ -161,36 +173,40 @@ export function AppSidebar({
         <div className="flex items-center gap-2.5 mb-1">
           <IonIcon icon={documentTextOutline} className="text-2xl text-[var(--teal)]" />
           <span className="font-semibold text-sm leading-tight text-[var(--text-primary)]">
-            Escrituração Fiscal
+            Escrituração Fiscal - eFis
             <br />
             <span className="font-medium text-[var(--text-secondary)]">
-              {appModule === 'nfe' ? 'NF-e' : 'NFC-e'}
+              {appModule === 'nfe' ? 'NF-e' : appModule === 'relatorio' ? 'Relatório' : 'NFC-e'}
             </span>
           </span>
         </div>
-        <div className="mt-2 flex items-center gap-1.5">
-          <span
-            className={[
-              'inline-block w-1.5 h-1.5 rounded-full transition-colors',
-              certificateReady ? 'bg-[var(--green)]' : 'bg-[var(--text-muted)]',
-            ].join(' ')}
-          />
-          <span className="text-xs text-[var(--text-muted)]">
-            {certificateReady ? certificateState.ambiente : 'sem certificado'}
-          </span>
-        </div>
+        {appModule !== 'relatorio' && (
+          <div className="mt-2 flex items-center gap-1.5">
+            <span
+              className={[
+                'inline-block w-1.5 h-1.5 rounded-full transition-colors',
+                certificateReady ? 'bg-[var(--green)]' : 'bg-[var(--text-muted)]',
+              ].join(' ')}
+            />
+            <span className="text-xs text-[var(--text-muted)]">
+              {certificateReady ? certificateState.ambiente : 'sem certificado'}
+            </span>
+          </div>
+        )}
 
-        <div
-          className={[
-            'mt-3 max-w-full rounded px-2.5 py-2 transition-colors duration-150',
-            hasSelectedCertificate
-              ? 'border border-[var(--teal)] bg-[var(--teal-glow)]'
-              : 'border border-dashed border-[var(--text-muted)] bg-transparent',
-          ].join(' ')}
-        >
-          <p className="text-[10px] uppercase tracking-wider mb-1 text-[var(--text-muted)]">Certificado</p>
-          <SidebarCertificatePreview certificateState={certificateState} />
-        </div>
+        {appModule !== 'relatorio' && (
+          <div
+            className={[
+              'mt-3 max-w-full rounded px-2.5 py-2 transition-colors duration-150',
+              hasSelectedCertificate
+                ? 'border border-[var(--teal)] bg-[var(--teal-glow)]'
+                : 'border border-dashed border-[var(--text-muted)] bg-transparent',
+            ].join(' ')}
+          >
+            <p className="text-[10px] uppercase tracking-wider mb-1 text-[var(--text-muted)]">Certificado</p>
+            <SidebarCertificatePreview certificateState={certificateState} />
+          </div>
+        )}
       </div>
 
       <SidebarNav tabs={tabs} activeTab={activeTab} onSelectTab={onSelectTab} />

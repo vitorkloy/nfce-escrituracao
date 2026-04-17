@@ -3,7 +3,7 @@ import './globals.css'
 import { ThemeProvider } from './theme-provider'
 
 export const metadata: Metadata = {
-  title: 'Escrituração Fiscal — SEFAZ-SP',
+  title: 'Escrituração Fiscal - eFis',
   description: 'Aplicativo de escrituração fiscal com integração aos serviços da SEFAZ (NF-e, NFC-e e demais módulos).',
 }
 

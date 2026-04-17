@@ -5,6 +5,15 @@ import type { ToastVariant } from '@/types/nfce-app'
 
 export type UpdateUiPhase = 'idle' | 'available' | 'downloading' | 'ready' | 'error'
 
+function sanitizeUpdaterMessage(raw: string): string {
+  const semHtml = raw.replace(/<[^>]*>/g, ' ')
+  const linhas = semHtml
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !/^Made-with:\s*Cursor$/i.test(l))
+  return linhas.join(' ').replace(/\s+/g, ' ').trim()
+}
+
 export function useAutoUpdater(
   isElectron: boolean,
   currentVersion: string,
@@ -39,7 +48,7 @@ export function useAutoUpdater(
     })
 
     const offErr = u.onUpdaterError((info) => {
-      const msg = info.message || 'Erro ao verificar ou baixar atualização.'
+      const msg = sanitizeUpdaterMessage(info.message || '') || 'Erro ao verificar ou baixar atualização.'
       showToast('erro', msg)
       setErrorMessage(msg)
       setPhase((prev) => (prev === 'downloading' || prev === 'ready' ? 'error' : prev))
@@ -66,9 +75,10 @@ export function useAutoUpdater(
     setPercent(0)
     const r = await window.electron.updater.download()
     if (!r.ok) {
+      const msg = sanitizeUpdaterMessage(r.message || '') || 'Erro ao baixar atualização.'
       setPhase('error')
-      setErrorMessage(r.message)
-      showToast('erro', r.message)
+      setErrorMessage(msg)
+      showToast('erro', msg)
     }
   }, [isElectron, showToast])
 
